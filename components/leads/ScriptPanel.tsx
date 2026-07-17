@@ -7,8 +7,67 @@ import { Button } from '@/components/ui/button'
 import {
   ChevronDown, ChevronUp, Copy, Check,
   Target, MessageSquare, HelpCircle, ArrowRight, Flag, BookOpen, AlertTriangle,
-  Mic, ListChecks
+  Mic, ListChecks, Cog, PenLine
 } from 'lucide-react'
+
+// ─── Farbcode-Markup (aus full_script, Migration 016) ─────────────────────────
+// [G]…[/G] = Schlüsselsatz (gelb) · [J]…[/J] = Ja-Trigger (grün, danach still)
+// [R]…[/R] = Regie, nicht vorlesen (blau, kursiv) · [U]…[/U] = Wort betonen.
+// Übrige [Platzhalter] werden orange markiert (vor dem Call füllen).
+const SCRIPT_FONT = { fontFamily: 'Georgia, "Times New Roman", serif' }
+
+function renderMarkup(text: string, key = 0): React.ReactNode[] {
+  const out: React.ReactNode[] = []
+  const re = /\[(G|J|R|U)\]([\s\S]*?)\[\/\1\]/
+  let rest = text
+  let k = key
+  while (rest.length > 0) {
+    const m = rest.match(re)
+    if (!m || m.index === undefined) { out.push(...renderPlaceholders(rest, k)); break }
+    if (m.index > 0) out.push(...renderPlaceholders(rest.slice(0, m.index), k))
+    const inner = renderMarkup(m[2], k * 100 + 1)
+    const tag = m[1]
+    k++
+    if (tag === 'G') out.push(<mark key={`g${k}`} className="bg-yellow-200/80 text-slate-900 rounded px-0.5">{inner}</mark>)
+    else if (tag === 'J') out.push(<mark key={`j${k}`} className="bg-green-200/90 text-slate-900 font-semibold rounded px-0.5">{inner}</mark>)
+    else if (tag === 'R') out.push(<span key={`r${k}`} className="bg-blue-100 text-blue-800 italic text-[0.85em] rounded px-1" style={{ fontFamily: 'inherit' }}>{inner}</span>)
+    else out.push(<u key={`u${k}`} className="decoration-2 underline-offset-2">{inner}</u>)
+    rest = rest.slice(m.index + m[0].length)
+  }
+  return out
+}
+
+function renderPlaceholders(text: string, key = 0): React.ReactNode[] {
+  const out: React.ReactNode[] = []
+  const re = /\[([^\[\]\n]{1,40})\]/
+  let rest = text
+  let k = 0
+  while (rest.length > 0) {
+    const m = rest.match(re)
+    if (!m || m.index === undefined) { out.push(rest); break }
+    if (m.index > 0) out.push(rest.slice(0, m.index))
+    k++
+    out.push(
+      <span key={`p${key}-${k}`} className="bg-orange-200/80 text-orange-900 rounded px-1 text-[0.9em] font-medium" style={{ fontFamily: 'ui-sans-serif, system-ui' }}>
+        [{m[1]}]
+      </span>
+    )
+    rest = rest.slice(m.index + m[0].length)
+  }
+  return out
+}
+
+function ColorLegend() {
+  return (
+    <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-500">
+      <span><mark className="bg-yellow-200/80 rounded px-1">Gelb</mark> Schlüsselsatz</span>
+      <span><mark className="bg-green-200/90 rounded px-1 font-semibold">Grün</mark> Ja-Trigger → still sein</span>
+      <span><span className="bg-blue-100 text-blue-800 italic rounded px-1">Blau</span> Regie – nicht vorlesen</span>
+      <span><span className="bg-orange-200/80 text-orange-900 rounded px-1">Orange</span> Platzhalter</span>
+      <span><u className="decoration-2">Unterstrichen</u> = betonen</span>
+    </div>
+  )
+}
 
 interface Props {
   script: Script | null
@@ -66,6 +125,11 @@ export function ScriptPanel({ script, lead, profile, objections = [] }: Props) {
       })())
   }
 
+  // Markup-Tags für Klartext-Kopien entfernen
+  function stripMarkup(text: string): string {
+    return text.replace(/\[\/?[GJRU]\]/g, '')
+  }
+
   function copyScript() {
     if (!script) return
     const parts = [
@@ -73,10 +137,11 @@ export function ScriptPanel({ script, lead, profile, objections = [] }: Props) {
       script.opening_line   && `\nEINSTIEG:\n${personalize(script.opening_line)}`,
       script.relevance_line && `\nWARUM SIE JETZT:\n${personalize(script.relevance_line)}`,
       script.core_question  && `\nKERNFRAGE:\n${personalize(script.core_question)}`,
+      script.mechanism      && `\nMECHANISMUS:\n${personalize(script.mechanism)}`,
       script.main_body      && `\nHAUPTTEIL:\n${personalize(script.main_body)}`,
       script.transition_line && `\nÜBERGANG:\n${personalize(script.transition_line)}`,
       script.closing_line   && `\nABSCHLUSS:\n${personalize(script.closing_line)}`,
-    ].filter(Boolean).join('\n')
+    ].filter(Boolean).map(t => stripMarkup(t as string)).join('\n')
     navigator.clipboard.writeText(parts)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
@@ -171,11 +236,22 @@ export function ScriptPanel({ script, lead, profile, objections = [] }: Props) {
       {script.core_question && (
         <ScriptBlock
           icon={<HelpCircle className="h-3.5 w-3.5 text-purple-500" />}
-          label="Kernfrage"
+          label="Kernfrage (Methodenfrage)"
           labelColor="text-purple-700"
           bgColor="bg-purple-50 border-purple-100"
           text={personalize(script.core_question)}
           highlight
+        />
+      )}
+
+      {/* Mechanismus — Korthauer: erklären, ohne zu viel zu erklären */}
+      {script.mechanism && (
+        <ScriptBlock
+          icon={<Cog className="h-3.5 w-3.5 text-cyan-600" />}
+          label={'Mechanismus (wenn „Was ist das?")'}
+          labelColor="text-cyan-700"
+          bgColor="bg-cyan-50 border-cyan-100"
+          text={personalize(script.mechanism)}
         />
       )}
 
@@ -229,7 +305,23 @@ export function ScriptPanel({ script, lead, profile, objections = [] }: Props) {
         </div>
       )}
 
-      {/* Full Script — einklappbar */}
+      {/* Notiz-Checkliste — hält die Kette Skript → Notizen → Automation intakt */}
+      {Array.isArray(script.required_notes_json) && script.required_notes_json.length > 0 && (
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5">
+          <div className="flex items-center gap-1.5 mb-1.5 text-xs font-bold uppercase tracking-wider text-slate-500">
+            <PenLine className="h-3.5 w-3.5" /> Im Call notieren
+          </div>
+          <ul className="space-y-1">
+            {script.required_notes_json.map((n, i) => (
+              <li key={i} className="flex gap-2 text-xs text-slate-600 leading-relaxed">
+                <span className="text-slate-300">▢</span><span>{n}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Full Script — einklappbar, farbcodiert, ruhige Lesbarkeit (Serif) */}
       {script.full_script && (
         <div className="border border-slate-200 rounded-xl overflow-hidden">
           <button
@@ -245,9 +337,10 @@ export function ScriptPanel({ script, lead, profile, objections = [] }: Props) {
             }
           </button>
           {fullScriptOpen && (
-            <div className="px-4 py-3 bg-white">
-              <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-line">
-                {personalize(script.full_script)}
+            <div className="px-4 py-3 bg-white space-y-3">
+              <ColorLegend />
+              <p className="text-[15px] text-slate-800 leading-[1.75] whitespace-pre-line" style={SCRIPT_FONT}>
+                {renderMarkup(personalize(script.full_script))}
               </p>
             </div>
           )}
@@ -278,7 +371,7 @@ export function ScriptPanel({ script, lead, profile, objections = [] }: Props) {
                 </button>
                 {expandedObjection === i && (
                   <div className="px-3 pb-3 pt-1 bg-green-50 border-t border-green-100">
-                    <p className="text-sm text-slate-700 leading-relaxed">{personalize(obj.response)}</p>
+                    <p className="text-sm text-slate-700 leading-relaxed" style={SCRIPT_FONT}>{renderMarkup(personalize(obj.response))}</p>
                   </div>
                 )}
               </div>
@@ -307,8 +400,8 @@ function ScriptBlock({
       <div className={`flex items-center gap-1.5 mb-2 text-xs font-bold uppercase tracking-wider ${labelColor}`}>
         {icon} {label}
       </div>
-      <p className={`text-sm text-slate-800 leading-relaxed whitespace-pre-line ${highlight ? 'font-medium' : ''}`}>
-        {text}
+      <p className={`text-[15px] text-slate-800 leading-[1.7] whitespace-pre-line ${highlight ? 'font-medium' : ''}`} style={SCRIPT_FONT}>
+        {renderMarkup(text)}
       </p>
     </div>
   )

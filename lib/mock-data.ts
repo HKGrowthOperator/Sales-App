@@ -341,6 +341,7 @@ function makeScript(s: Partial<Script> & Pick<Script, 'id' | 'role' | 'title'>):
     version: 1,
     relevance_line: null,
     core_question: null,
+    mechanism: null,
     transition_line: null,
     call_goal: null,
     full_script: null,

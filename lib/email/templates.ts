@@ -14,32 +14,38 @@
 import { renderHkEmailHtml } from '@/lib/email/layout'
 
 export type CallType = 'setter_call' | 'closer_call'
-export type ProductArea = 'website' | 'social' | 'ai' | 'system'
+// DB-kompatible Werte (CHECK-Constraints aus 013/014):
+// website_funnel · social_media_brand_building · ai_integration · growth_system
+export type ProductArea = 'website_funnel' | 'social_media_brand_building' | 'ai_integration' | 'growth_system'
 
 export const PRODUCT_LABEL: Record<ProductArea, string> = {
-  website: 'Websites',
-  social: 'Social Media',
-  ai: 'KI-Integration',
-  system: 'Ganzheitliches Wachstumssystem',
+  website_funnel: 'Websites',
+  social_media_brand_building: 'Social Media & Branding',
+  ai_integration: 'KI-Integration',
+  growth_system: 'Ganzheitliches Wachstumssystem',
 }
 
-/** Einstiegswinkel des Leads → Produktfeld der Mail-Vorlage. */
+/** Einstiegswinkel des Leads → Produktfeld (Pfeiler). Deckt alle 15 Winkel ab:
+ *  Lokale Sichtbarkeit → Website · PB/UB/Content/Imagefilm/Events → Branding ·
+ *  KI/Automationen → KI · Komplettangebot/Anfragen/Ads/Recruiting/Rest → Wachstumssystem. */
 export function productAreaFromEntryAngle(entryAngle: string | null | undefined): ProductArea {
   switch (entryAngle) {
     case 'Website':
-      return 'website'
+    case 'Lokale Sichtbarkeit':
+      return 'website_funnel'
     case 'Social Media':
     case 'Personal Brand':
     case 'Unternehmensbrand':
     case 'Außenwirkung':
     case 'Content-Produktion':
     case 'Imagefilm':
-      return 'social'
+    case 'Events':
+      return 'social_media_brand_building'
     case 'KI-Zeitersparnis':
     case 'Automationen & CRM':
-      return 'ai'
+      return 'ai_integration'
     default:
-      return 'system'
+      return 'growth_system'
   }
 }
 
@@ -191,7 +197,7 @@ const CLOSER_MIDDLE =
 const CLOSER_OUTRO = 'Beste Grüße\n\n{{assigned_closer_name}}\nHK Growth Operator'
 
 const SETTER_BODY: Record<ProductArea, string> = {
-  website: `${SETTER_INTRO}
+  website_funnel: `${SETTER_INTRO}
 
 Ihr kostenfreier Website-Experten-Call mit {{assigned_setter_name}} ist verbindlich eingetragen:
 
@@ -206,7 +212,7 @@ Hilfreich sind der Link zu Ihrer aktuellen Website, Ihre wichtigsten Leistungen 
 Erst nach der fachlichen Einschätzung prüfen wir gemeinsam, ob ein weiterer strategischer Austausch oder eine Zusammenarbeit sinnvoll ist.
 
 ${SETTER_OUTRO}`,
-  social: `${SETTER_INTRO}
+  social_media_brand_building: `${SETTER_INTRO}
 
 Ihr kostenfreier Social-Media-Experten-Call mit {{assigned_setter_name}} ist verbindlich eingetragen:
 
@@ -223,7 +229,7 @@ Hilfreich sind Ihre aktuellen Profile, Ihre wichtigsten Angebote, Ihre Zielgrupp
 Erst nach unserer fachlichen Einschätzung prüfen wir gemeinsam, ob ein weiterer Austausch oder eine Zusammenarbeit sinnvoll ist.
 
 ${SETTER_OUTRO}`,
-  ai: `${SETTER_INTRO}
+  ai_integration: `${SETTER_INTRO}
 
 Ihr kostenfreier KI-Experten-Call mit {{assigned_setter_name}} ist verbindlich eingetragen:
 
@@ -240,7 +246,7 @@ Hilfreich sind eine kurze Übersicht Ihrer eingesetzten Systeme, wiederkehrender
 Erst anschließend prüfen wir gemeinsam, ob eine vertiefte Analyse oder Zusammenarbeit sinnvoll ist.
 
 ${SETTER_OUTRO}`,
-  system: `${SETTER_INTRO}
+  growth_system: `${SETTER_INTRO}
 
 Ihr kostenfreier strategischer Experten-Call mit {{assigned_setter_name}} ist verbindlich eingetragen:
 
@@ -260,28 +266,28 @@ ${SETTER_OUTRO}`,
 }
 
 const CLOSER_FOCUS: Record<ProductArea, string> = {
-  website:
+  website_funnel:
     'Im nächsten Termin konkretisieren wir, wie Positionierung, Seitenstruktur, Vertrauensaufbau, Conversion und technischer Aufbau zu einem belastbaren digitalen Vertriebsweg verbunden werden.',
-  social:
+  social_media_brand_building:
     'Im nächsten Termin konkretisieren wir, wie Positionierung, Content, Distribution und der Übergang zur Anfrage als planbares Social-Media-System aufgebaut werden.',
-  ai:
+  ai_integration:
     'Im nächsten Termin konkretisieren wir den priorisierten Prozess, die technisch sinnvolle Lösung, notwendige Schnittstellen und den wirtschaftlichen Rahmen der Umsetzung.',
-  system:
+  growth_system:
     'Im nächsten Termin konkretisieren wir die sinnvolle Reihenfolge aus Positionierung, Social Media, Website, Sales, CRM und Automatisierung.',
 }
 
 const SETTER_SUBJECT: Record<ProductArea, string> = {
-  website: 'Ihr kostenfreier Experten-Call zu Websites',
-  social: 'Ihr kostenfreier Experten-Call zu Social Media',
-  ai: 'Ihr kostenfreier Experten-Call zu KI-Integration',
-  system: 'Ihr kostenfreier Experten-Call zu Ganzheitliches Wachstumssystem',
+  website_funnel: 'Ihr kostenfreier Experten-Call zu Websites',
+  social_media_brand_building: 'Ihr kostenfreier Experten-Call zu Social Media',
+  ai_integration: 'Ihr kostenfreier Experten-Call zu KI-Integration',
+  growth_system: 'Ihr kostenfreier Experten-Call zu Ganzheitliches Wachstumssystem',
 }
 
 const CLOSER_SUBJECT: Record<ProductArea, string> = {
-  website: 'Ihr Strategiegespräch zu Websites',
-  social: 'Ihr Strategiegespräch zu Social Media',
-  ai: 'Ihr Strategiegespräch zu KI-Integration',
-  system: 'Ihr Strategiegespräch zu Ganzheitliches Wachstumssystem',
+  website_funnel: 'Ihr Strategiegespräch zu Websites',
+  social_media_brand_building: 'Ihr Strategiegespräch zu Social Media',
+  ai_integration: 'Ihr Strategiegespräch zu KI-Integration',
+  growth_system: 'Ihr Strategiegespräch zu Ganzheitliches Wachstumssystem',
 }
 
 function builtinTemplate(templateKey: string, productArea: ProductArea): EmailTemplate | null {
