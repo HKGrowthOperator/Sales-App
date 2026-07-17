@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from '@/lib/hooks/use-toast'
 import { ScriptPersonalizer } from '@/components/scripts/ScriptPersonalizer'
-import { Pencil, Plus, CheckCircle, XCircle, Clock, FileEdit, Sparkles } from 'lucide-react'
+import { renderMarkup, ColorLegend, SCRIPT_FONT } from '@/components/shared/ScriptMarkup'
+import { Pencil, Plus, CheckCircle, XCircle, Clock, FileEdit, Sparkles, BookOpen, ChevronDown, ChevronUp, Target } from 'lucide-react'
 
 interface Props {
   profile: Profile
@@ -31,6 +32,7 @@ export function ScriptsClient({ profile, masterScripts, personalScripts, pending
   const router = useRouter()
   const [editing, setEditing] = useState<{ master: Script; existing: Script | null } | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
+  const [openScript, setOpenScript] = useState<string | null>(null)   // aufgeklapptes Voll-Skript (Review)
 
   const personalByParent = new Map(personalScripts.map(p => [p.parent_script_id, p]))
   const grouped = masterScripts.reduce((acc, s) => {
@@ -124,7 +126,10 @@ export function ScriptsClient({ profile, masterScripts, personalScripts, pending
         </section>
       )}
 
-      {/* ── HK Master-Skripte ──────────────────────────────────────────── */}
+      {/* ── HK Master-Skripte (mit Voll-Ansicht für Review/Feedback) ───── */}
+      <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+        <ColorLegend />
+      </div>
       {roleOrder.filter(r => grouped[r]?.length).map(role => (
         <section key={role}>
           <h2 className="text-lg font-semibold text-slate-700 mb-3 flex items-center gap-2">
@@ -134,8 +139,9 @@ export function ScriptsClient({ profile, masterScripts, personalScripts, pending
           <div className="grid gap-4 lg:grid-cols-2">
             {grouped[role].map(s => {
               const mine = personalByParent.get(s.id) || null
+              const isOpen = openScript === s.id
               return (
-                <Card key={s.id}>
+                <Card key={s.id} className={isOpen ? 'lg:col-span-2' : ''}>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm">{s.title}</CardTitle>
                     <div className="flex items-center gap-2 flex-wrap">
@@ -144,14 +150,37 @@ export function ScriptsClient({ profile, masterScripts, personalScripts, pending
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-3">
+                    {s.call_goal && (
+                      <p className="text-xs text-slate-600 flex gap-1.5">
+                        <Target className="h-3.5 w-3.5 text-blue-500 shrink-0 mt-0.5" />
+                        <span><span className="font-semibold">Ziel: </span>{s.call_goal}</span>
+                      </p>
+                    )}
                     {s.core_question && (
                       <p className="text-xs text-slate-600"><span className="font-semibold">Kernfrage: </span>{s.core_question}</p>
                     )}
-                    <Button size="sm" variant={mine ? 'outline' : 'default'} className="gap-1.5"
-                      onClick={() => setEditing({ master: s, existing: mine })}>
-                      {mine ? <><FileEdit className="h-3.5 w-3.5" /> Meine Version ({STATUS_BADGE[mine.status].label})</>
-                            : <><Plus className="h-3.5 w-3.5" /> Eigene Version erstellen</>}
-                    </Button>
+                    {isOpen && s.full_script && (
+                      <div className="rounded-xl border border-slate-200 bg-white p-4">
+                        <p className="text-[15px] text-slate-800 leading-[1.75] whitespace-pre-line" style={SCRIPT_FONT}>
+                          {renderMarkup(s.full_script)}
+                        </p>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {s.full_script && (
+                        <Button size="sm" variant="outline" className="gap-1.5"
+                          onClick={() => setOpenScript(isOpen ? null : s.id)}>
+                          <BookOpen className="h-3.5 w-3.5" />
+                          {isOpen ? <>Skript zuklappen <ChevronUp className="h-3.5 w-3.5" /></>
+                                  : <>Vollständiges Skript <ChevronDown className="h-3.5 w-3.5" /></>}
+                        </Button>
+                      )}
+                      <Button size="sm" variant={mine ? 'outline' : 'default'} className="gap-1.5"
+                        onClick={() => setEditing({ master: s, existing: mine })}>
+                        {mine ? <><FileEdit className="h-3.5 w-3.5" /> Meine Version ({STATUS_BADGE[mine.status].label})</>
+                              : <><Plus className="h-3.5 w-3.5" /> Eigene Version erstellen</>}
+                      </Button>
+                    </div>
                   </CardContent>
                 </Card>
               )
