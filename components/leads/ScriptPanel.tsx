@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { Lead, Profile, Script, ObjectionHandling, ObjectionItem, SITUATION_LABELS } from '@/lib/types'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -22,6 +22,12 @@ export function ScriptPanel({ script, lead, profile, objections = [] }: Props) {
   const [fullScriptOpen, setFullScriptOpen] = useState(false)
   const [expandedObjection, setExpandedObjection] = useState<number | null>(null)
   const [copied, setCopied] = useState(false)
+  // „Back to the Script": Einwand zuklappen + zurück an den Skript-Anfang
+  const topRef = useRef<HTMLDivElement>(null)
+  function backToScript() {
+    setExpandedObjection(null)
+    topRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
 
   // Name des eingeloggten Nutzers (Anrufer) — Closer = Luis/Nick, Opener/Setter = jeweilige Person
   const callerName = (profile.full_name || '').trim() || 'HK Growth'
@@ -43,7 +49,10 @@ export function ScriptPanel({ script, lead, profile, objections = [] }: Props) {
   function personalize(text: string | null | undefined): string {
     if (!text) return ''
     return text
-      // Anrufer = eingeloggter Nutzer
+      // Anrufer = eingeloggter Nutzer (HK-Standard: [dein Name])
+      .replaceAll('[dein Name]', callerName)
+      .replaceAll('[Dein Name]', callerName)
+      .replaceAll('[dein name]', callerName)
       .replaceAll('[ICH]', callerName)
       .replaceAll('[OPENER-NAME]', callerName)
       .replaceAll('[SETTER-NAME]', callerName)
@@ -98,7 +107,7 @@ export function ScriptPanel({ script, lead, profile, objections = [] }: Props) {
   const situationLabel = script.situation ? SITUATION_LABELS[script.situation] : null
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" ref={topRef}>
 
       {/* Header */}
       <div className="flex items-center justify-between gap-3">
@@ -307,8 +316,14 @@ export function ScriptPanel({ script, lead, profile, objections = [] }: Props) {
                   }
                 </button>
                 {expandedObjection === i && (
-                  <div className="px-3 pb-3 pt-1 bg-green-50 border-t border-green-100">
+                  <div className="px-3 pb-3 pt-1 bg-green-50 border-t border-green-100 space-y-2">
                     <p className="text-sm text-slate-700 leading-relaxed" style={SCRIPT_FONT}>{renderMarkup(personalize(obj.response))}</p>
+                    <button
+                      onClick={backToScript}
+                      className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-slate-800 text-white text-xs font-bold uppercase tracking-wider py-2 hover:bg-slate-700 transition-colors"
+                    >
+                      ← Back to the Script
+                    </button>
                   </div>
                 )}
               </div>
