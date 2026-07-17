@@ -1,76 +1,61 @@
 -- ============================================================
--- 015 — Mailvorlagen für growth_system (Setter + Closer)
+-- 015 — growth_system überall erlauben (optional, idempotent)
 -- ------------------------------------------------------------
--- Bestätigungsmails für den 4. Pfeiler „Ganzheitliches
--- Wachstumssystem" im Stil von 013. Texte = HK Mailsystem
--- (HK-SALES-EXPERT-CALL-BOOKED-SYSTEM-V1 / HK-SALES-CLOSER-BOOKED-SYSTEM-V1).
--- Idempotent über WHERE NOT EXISTS (key + product_area).
+-- HINWEIS: Die Bestätigungsmails für das Wachstumssystem (Setter +
+-- Closer) sind fest im Code hinterlegt (lib/email/templates.ts,
+-- builtinTemplate → SETTER_BODY/CLOSER_* mit growth_system). Es wird
+-- KEINE DB-Zeile benötigt — die reale email_templates-Tabelle wird für
+-- den Versand ohnehin über den Code-Fallback bedient.
+--
+-- Diese Migration erweitert nur alle product_area-CHECK-Constraints um
+-- 'growth_system' (inkl. der Audit-Tabelle appointment_email_events),
+-- damit growth_system-Buchungen eine saubere Protokoll-Zeile schreiben.
+-- Rein optional: Ohne diese Migration funktionieren Skripte, Mails und
+-- Buchungen trotzdem (die Audit-Insert ist im Code try/catch-gesichert).
+-- Defensiv: läuft auch, wenn einzelne Tabellen/Spalten/Constraints fehlen.
 -- ============================================================
 
-insert into public.email_templates (key, product_area, subject, body_text, is_active)
-select
-  'setter_booking_confirmation',
-  'growth_system',
-  'Ihr kostenfreier Experten-Call zum Wachstumssystem',
-  $tpl$Hallo {{contact_first_name}},
+do $$
+declare
+  t text;
+  c record;
+  tables text[] := array[
+    'email_templates', 'email_jobs', 'meeting_links', 'appointment_email_events'
+  ];
+begin
+  foreach t in array tables loop
+    -- Tabelle vorhanden?
+    if not exists (
+      select 1 from information_schema.tables
+      where table_schema = 'public' and table_name = t
+    ) then
+      continue;
+    end if;
 
-vielen Dank für das Gespräch mit {{assigned_opener_name}}.
+    -- Alle CHECK-Constraints der Tabelle entfernen, die product_area einschränken
+    for c in
+      select con.conname
+      from pg_constraint con
+      join pg_class rel on rel.oid = con.conrelid
+      join pg_namespace nsp on nsp.oid = rel.relnamespace
+      where nsp.nspname = 'public'
+        and rel.relname = t
+        and con.contype = 'c'
+        and pg_get_constraintdef(con.oid) ilike '%product_area%'
+    loop
+      execute format('alter table public.%I drop constraint %I', t, c.conname);
+    end loop;
 
-Ihr kostenfreier strategischer Experten-Call mit {{assigned_setter_name}} ist verbindlich eingetragen:
-
-{{appointment_date}} um {{appointment_time}} Uhr
-Dauer: ca. {{appointment_duration}}
-Zugang: {{appointment_link}}
-
-Im Call betrachten wir nicht nur eine einzelne Maßnahme. Wir analysieren, wie Positionierung, Social Media, Website, Anfragewege, Vertrieb, Follow-up und Automatisierung in Ihrem Unternehmen aktuell zusammenspielen.
-
-Sie erhalten konkretes Expertenfeedback dazu, an welchen Übergängen Potenzial verloren geht, welcher Engpass derzeit den größten Einfluss auf Wachstum besitzt und welche Reihenfolge der nächsten Schritte fachlich sinnvoll ist.
-
-Der Fokus liegt nicht darauf, möglichst viele Einzelleistungen zu empfehlen. Entscheidend ist, ein System zu entwickeln, in dem Aufmerksamkeit, Vertrauen, Anfrage, Entscheidung und operative Bearbeitung sauber ineinandergreifen.
-
-Hilfreich sind Ihre wichtigsten Angebote, Zielkunden, Website, Social-Media-Kanäle und eine grobe Übersicht Ihres aktuellen Vertriebsprozesses.
-
-Erst nach unserer Einordnung prüfen wir gemeinsam, ob und in welcher Form eine Zusammenarbeit sinnvoll ist.
-
-Beste Grüße
-
-{{assigned_setter_name}}
-HK Growth Operator$tpl$,
-  true
-where not exists (
-  select 1 from public.email_templates
-  where key = 'setter_booking_confirmation' and product_area = 'growth_system'
-);
-
-insert into public.email_templates (key, product_area, subject, body_text, is_active)
-select
-  'closer_booking_confirmation',
-  'growth_system',
-  'Ihr Strategiegespräch zum Wachstumssystem',
-  $tpl$Hallo {{contact_first_name}},
-
-vielen Dank für den Experten-Call mit {{assigned_setter_name}}.
-
-Auf Grundlage Ihrer Ausgangssituation und der besprochenen Ziele sehen wir einen sinnvollen Ansatz, den wir im nächsten Termin konkret ausarbeiten.
-
-Ihr Strategiegespräch mit {{assigned_closer_name}} findet statt am:
-
-{{appointment_date}} um {{appointment_time}} Uhr
-Dauer: ca. {{appointment_duration}}
-Zugang: {{appointment_link}}
-
-Im nächsten Termin konkretisieren wir die sinnvolle Reihenfolge aus Positionierung, Social Media, Website, Sales, CRM und Automatisierung.
-
-Im Gespräch betrachten wir außerdem den sinnvollen Leistungsumfang, Verantwortlichkeiten, Voraussetzungen, wirtschaftliche Rahmenbedingungen und die Entscheidung über das weitere Vorgehen.
-
-Damit alle fachlichen und wirtschaftlichen Fragen direkt geklärt werden können, sollten alle Personen teilnehmen, die an der Entscheidung oder späteren Umsetzung beteiligt sind.
-
-Beste Grüße
-
-{{assigned_closer_name}}
-HK Growth Operator$tpl$,
-  true
-where not exists (
-  select 1 from public.email_templates
-  where key = 'closer_booking_confirmation' and product_area = 'growth_system'
-);
+    -- Neu anlegen, nur wenn Spalte product_area existiert
+    if exists (
+      select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = t and column_name = 'product_area'
+    ) then
+      execute format(
+        'alter table public.%I add constraint %I check (product_area is null or product_area in
+           (''ai_integration'', ''social_media_brand_building'', ''website_funnel'', ''growth_system'', ''custom''))',
+        t, t || '_product_area_check'
+      );
+    end if;
+  end loop;
+end $$;

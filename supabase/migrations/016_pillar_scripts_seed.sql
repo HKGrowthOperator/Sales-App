@@ -463,8 +463,12 @@ where not exists (select 1 from public.scripts where title = 'HK ▸ Wachstumssy
 
 -- ── 3) Geteilte Bausteine → objection_library ────────────────
 -- Gatekeeper (Opener), Erstkontakt-Einwände (Opener), Closer-Einwände, Follow-up.
-insert into public.objection_library (key, role, entry_angle, objection_label, response, psychology_note, sort_order, is_active)
-select * from (values
+-- role ist Enum role_context → expliziter Cast (Text-Literale aus einem
+-- mehrzeiligen VALUES werden sonst als text aufgelöst). entry_angle bleibt
+-- weg → Spalten-Default NULL (vermeidet weiteres Enum/Type-Raten).
+insert into public.objection_library (key, role, objection_label, response, psychology_note, sort_order, is_active)
+select v.key, v.role::role_context, v.objection_label, v.response, v.psychology_note, v.sort_order, v.is_active
+from (values
   -- Gatekeeper (Opener)
   ('gk_direkt','Opener',null,'Gatekeeper: Direkter Einstieg','Hallo, [ICH] von HK Growth. Verbinden Sie mich einmal bitte direkt mit Herrn/Frau [Name]. Dankeschön.','Selbstverständlichkeit signalisieren — keine Rechtfertigung.',10,true),
   ('gk_worum','Opener',null,'Gatekeeper: „Worum geht es?"','Es geht um die digitale Außenwirkung und darum, wie Ihr Unternehmen online von Kunden oder Bewerbern wahrgenommen wird. Wenn Sie mich direkt durchstellen, erkläre ich es kurz persönlich — ich bleibe in der Leitung. Dankeschön.','Thema groß genug für den Chef, zu spezifisch für den Gatekeeper.',11,true),
