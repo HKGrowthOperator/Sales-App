@@ -122,13 +122,14 @@ function StartScreen({ profile, roleLabel, candidates }: { profile: Profile; rol
 }
 
 // ─── CALL ─────────────────────────────────────────────────────────────────────
-// Die 4 HK-Leistungspfeiler — Auswahl schreibt den kanonischen Einstiegswinkel
+// Die 3 HK-Anruf-Pfeiler — Auswahl schreibt den kanonischen Einstiegswinkel
 // an den Lead und steuert damit Skript, Bestätigungs-Mail (product_area) und Radar.
+// Es gibt genau DREI Gründe, warum wir anrufen. Das Wachstumssystem ist das
+// Angebots-Bündel im Closing — kein eigener Anruf-Grund.
 const PILLARS: { angle: string; label: string }[] = [
   { angle: 'Website', label: '🌐 Website' },
   { angle: 'Social Media', label: '📣 Social & Branding' },
-  { angle: 'Automationen & CRM', label: '🤖 KI-Automation' },
-  { angle: 'Komplettangebot', label: '📈 Wachstumssystem' },
+  { angle: 'Automationen & CRM', label: '🤖 KI-Integration' },
 ]
 
 function CallScreen({ profile, roleLabel, session, sessionLead, done, total, onSkip, onEnd }: {

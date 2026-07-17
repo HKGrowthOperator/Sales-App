@@ -15,17 +15,25 @@ Skript (scripts, Master/Personal)
           → email_jobs (Versand über runner.ts, gegated) + Radar/KPI
 ```
 
-## Die 4 Pfeiler
+## Die 3 Anruf-Pfeiler (Entscheidung HK, Migration 017)
+
+Es gibt genau **drei Gründe, warum wir anrufen** — der Sales-Mitarbeiter
+beherrscht EIN Skript-Set:
 
 | Pfeiler | entry_angle (kanonisch) | product_area | Skripte |
 |---|---|---|---|
-| 🌐 Website (inkl. Lokal/Google) | `Website` | `website_funnel` | HK ▸ Website — Opener/Setter/Closer |
-| 📣 Social & Branding (Firmen **oder** Personal) | `Social Media` | `social_media_brand_building` | HK ▸ Social & Branding — … |
-| 🤖 KI-Automation & Prozesse | `Automationen & CRM` | `ai_integration` | HK ▸ KI-Automation — … |
-| 📈 Ganzheitliches Wachstumssystem | `Komplettangebot` | `growth_system` | HK ▸ Wachstumssystem — … |
+| 🌐 Website (inkl. Lokal/Google/Anfragen) | `Website` | `website_funnel` | HK ▸ Website — Opener/Setter/Closer |
+| 📣 Social & Branding (Firmen **oder** Personal, inkl. Content/Recruiting-Sichtbarkeit) | `Social Media` | `social_media_brand_building` | HK ▸ Social & Branding — … |
+| 🤖 KI-Integration & Prozesse | `Automationen & CRM` | `ai_integration` | HK ▸ KI-Automation — … |
+
+**Das Ganzheitliche Wachstumssystem ist KEIN Anruf-Grund** — es ist das
+Angebots-Bündel, das im Closing entsteht, wenn mehrere Pfeiler zusammen
+Sinn ergeben. Die `growth_system`-Mailvorlagen bleiben dafür aktiv;
+eigene Wachstumssystem-Skripte sind archiviert (017). Events, Imagefilm,
+Recruiting & Co. sind Leistungen, aber keine eigenen Skripte mehr.
 
 Alle 15 Einstiegswinkel werden über `PILLAR_ANGLE` (lib/script-routing.ts)
-auf ihren Pfeiler gemappt — z. B. findet ein „Personal Brand"-Lead
+auf einen der drei Pfeiler gemappt — z. B. findet ein „Personal Brand"-Lead
 automatisch das Social-&-Branding-Skript. Persönliche, freigegebene
 Versionen haben weiter Vorrang vor den Mastern.
 
