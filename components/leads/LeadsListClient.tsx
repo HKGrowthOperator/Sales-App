@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { StatusBadge, ScoreBadge } from '@/components/shared/StatusBadge'
 import { getEntryAngleEmoji, formatDate, timeAgo } from '@/lib/utils'
-import { Search, Phone, Globe, ChevronRight, Filter, Plus } from 'lucide-react'
+import { Search, Phone, Globe, ChevronRight, Filter, Plus, Upload } from 'lucide-react'
 
 const ALL_STATUSES: LeadStatus[] = [
   'Neu', 'Zu kontaktieren', 'Nicht erreicht', 'Interessiert',
@@ -62,11 +62,18 @@ export function LeadsListClient({ profile, initialLeads }: Props) {
           <h1 className="text-2xl font-bold text-slate-900">Leads</h1>
           <p className="text-slate-500 text-sm">{filtered.length} von {initialLeads.length} Leads</p>
         </div>
-        <Link href="/leads/new">
-          <Button className="bg-blue-600 hover:bg-blue-700">
-            <Plus className="h-4 w-4 mr-1" /> Lead hinzufügen
-          </Button>
-        </Link>
+        <div className="flex gap-2">
+          <Link href="/leads/upload">
+            <Button variant="outline">
+              <Upload className="h-4 w-4 mr-1" /> Importieren
+            </Button>
+          </Link>
+          <Link href="/leads/new">
+            <Button className="bg-blue-600 hover:bg-blue-700">
+              <Plus className="h-4 w-4 mr-1" /> Lead hinzufügen
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* Filters */}
