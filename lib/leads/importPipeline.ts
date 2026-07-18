@@ -90,6 +90,7 @@ function leadFromRow(
     opener_pitch: row.opener_pitch ?? null,
     setter_context: row.setter_context ?? null,
     closer_context: row.closer_context ?? null,
+    automation_potential: row.automation_potential ?? null,
     status: 'Zu kontaktieren',
     next_step: missing.length ? `⚠️ Enrichment nötig: ${missing.join(', ')}` : null,
     radar_target_id: targetId,
@@ -179,6 +180,7 @@ export async function runLeadImportPipeline(
           if (r.social_url && !m.row.social_url) m.row.social_url = r.social_url
           if (r.pain_summary) m.row.pain_summary = r.pain_summary
           if (r.opener_pitch) m.row.opener_pitch = r.opener_pitch
+          if (r.automation_potential) m.row.automation_potential = r.automation_potential
           if (Array.isArray(r.product_areas) && r.product_areas.length) m.row.product_areas = r.product_areas
           if (r.recommended_offer) m.row.recommended_offer = r.recommended_offer
           if (r.overall) m.row.overall_score = r.overall

@@ -30,6 +30,7 @@ export interface ResearchResult {
   social_url?: string | null
   pain_summary?: string | null
   opener_pitch?: string | null
+  automation_potential?: string | null // Prozesse, die HK automatisieren könnte
   product_areas?: string[] | null // 'Website' | 'Social Media' | 'KI-Integration'
   recommended_offer?: string | null
   overall?: string | null // A | B | C | No-Fit
@@ -104,6 +105,7 @@ JSON-Felder (alle optional, null wenn unbekannt):
   "phone": string|null, "email": string|null, "social_url": string|null,
   "pain_summary": string|null — größter erkennbarer Engpass (1-2 Sätze, deutsch),
   "opener_pitch": string|null — 1 Satz Gesprächseinstieg für den Opener (deutsch),
+  "automation_potential": string|null — konkrete Prozesse dieser Firma, die man automatisieren könnte (z.B. Terminbuchung, Anfrage-Formulare, Angebots-/Rechnungsversand, Social-Media-Posting, E-Mail-Follow-ups, Bewertungsanfragen) — 1-2 Sätze deutsch, spezifisch für Branche/Auftritt,
   "product_areas": Array aus "Website"|"Social Media"|"KI-Integration",
   "recommended_offer": string|null,
   "overall": "A"|"B"|"C"|"No-Fit",
