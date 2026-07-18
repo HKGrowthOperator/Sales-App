@@ -20,7 +20,7 @@ import { toast } from '@/lib/hooks/use-toast'
 import {
   Phone, Globe, Instagram, Linkedin, Mail, ChevronLeft,
   Building2, User, Clock, Calendar, FileText, MessageSquare,
-  ExternalLink, CheckCircle, XCircle, ArrowRight
+  ExternalLink, CheckCircle, XCircle, ArrowRight, Sparkles, Loader2
 } from 'lucide-react'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
@@ -55,6 +55,32 @@ export function LeadDetailClient({ lead: initialLead, profile, script, objection
   // Auto-open form if ?action=note is set (from dashboard CTA buttons)
   const [showCallForm, setShowCallForm] = useState(searchParams.get('action') === 'note')
   const [updatingStatus, setUpdatingStatus] = useState(false)
+  const [researching, setResearching] = useState(false)
+
+  // Research-Refresh: Website/Social/Entscheider/Pain/Automatisierung neu recherchieren
+  async function runResearch() {
+    setResearching(true)
+    try {
+      const res = await fetch('/api/leads/research', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lead_id: lead.id }),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.ok) {
+        toast({ title: 'Research fehlgeschlagen', description: data.detail || data.error || `HTTP ${res.status}`, variant: 'destructive' })
+      } else if (!data.updated?.length) {
+        toast({ title: 'Research fertig', description: data.message || 'Nichts Neues gefunden.' })
+      } else {
+        toast({ title: 'Research aktualisiert', description: `Neu: ${data.updated.join(', ')}` })
+        router.refresh()
+      }
+    } catch {
+      toast({ title: 'Fehler', description: 'Research konnte nicht ausgeführt werden.', variant: 'destructive' })
+    } finally {
+      setResearching(false)
+    }
+  }
 
   const notes = (lead.call_notes || []) as CallNote[]
   const openerNote = notes.filter(n => n.role_context === 'Opener').sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
@@ -138,21 +164,28 @@ export function LeadDetailClient({ lead: initialLead, profile, script, objection
             </p>
           )}
         </div>
-        <Button
-          size="xl"
-          className={`shrink-0 ${noteButtonColor}`}
-          onClick={() => setShowCallForm(!showCallForm)}
-        >
-          <MessageSquare className="h-5 w-5 mr-2" />
-          {showCallForm ? 'Schließen' : noteButtonLabel}
-        </Button>
+        <div className="flex flex-col items-end gap-2 shrink-0">
+          <Button
+            size="xl"
+            className={noteButtonColor}
+            onClick={() => setShowCallForm(!showCallForm)}
+          >
+            <MessageSquare className="h-5 w-5 mr-2" />
+            {showCallForm ? 'Schließen' : noteButtonLabel}
+          </Button>
+          <Button variant="outline" size="sm" onClick={runResearch} disabled={researching}>
+            {researching
+              ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Recherchiere…</>
+              : <><Sparkles className="h-4 w-4 mr-1" /> Research aktualisieren</>}
+          </Button>
+        </div>
       </div>
 
       {/* Next Action — operativer Kompass */}
       {nextAction && <NextActionBox action={nextAction} />}
 
       {/* Radar-Kontext — rollenspezifische Pains + Befund */}
-      {(lead.opener_pitch || lead.setter_context || lead.closer_context || lead.radar_analysis) && (
+      {(lead.opener_pitch || lead.setter_context || lead.closer_context || lead.radar_analysis || lead.automation_potential) && (
         <div className="rounded-xl border border-violet-200 bg-violet-50 p-4 space-y-2">
           <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-violet-700">🛰 Radar-Kontext</div>
           {(() => {
@@ -166,6 +199,11 @@ export function LeadDetailClient({ lead: initialLead, profile, script, objection
               <p key={label} className="text-sm text-slate-700"><span className="font-semibold text-violet-700">{label}: </span>{v}</p>
             ))
           })()}
+          {lead.automation_potential && (
+            <p className="text-sm text-slate-700">
+              <span className="font-semibold text-violet-700">⚙️ Automatisierung: </span>{lead.automation_potential}
+            </p>
+          )}
           {lead.radar_analysis && (
             <div className="bg-white rounded-lg border border-slate-200 p-2">
               <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">Befund</p>

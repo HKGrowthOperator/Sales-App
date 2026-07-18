@@ -117,6 +117,7 @@ export interface Lead {
   setter_context?: string | null
   closer_context?: string | null
   radar_analysis?: string | null
+  automation_potential?: string | null
   created_at: string
   updated_at: string
   // joined
