@@ -17,6 +17,7 @@ export interface IngestLead {
   city?: string | null
   website?: string | null
   social_url?: string | null
+  linkedin?: string | null
   google_maps_url?: string | null
   phone?: string | null
   email?: string | null
@@ -48,6 +49,21 @@ export interface IngestLead {
   sources?: string[] | null
   sales_readiness?: string | null
   scanned_at?: string | null
+  // Reichhaltige, lead-only Felder (z.B. aus der Wachstumssystem-Liste).
+  // Landen NICHT in radar_targets, sondern direkt am erzeugten Lead.
+  cluster?: string | null
+  employee_count?: string | null
+  management?: string | null
+  owner_led?: string | null
+  package_potential?: string | null
+  cross_sell_score?: number | string | null
+  key_bottlenecks?: string | null
+  offer_level1?: string | null
+  offer_level2?: string | null
+  offer_level3?: string | null
+  recommended_entry?: string | null
+  hiring_signal?: string | null
+  approach_notes?: string | null
 }
 
 export interface MapResult {
@@ -55,6 +71,8 @@ export interface MapResult {
   reason?: string
   dedup_key?: string | null
   row?: Record<string, unknown>
+  /** Lead-only Zusatzfelder — werden erst am erzeugten Lead gesetzt, nicht in radar_targets. */
+  rich?: Record<string, unknown>
 }
 
 const VALID_PRODUCT_AREAS = new Set(['Website', 'Social Media', 'KI-Integration'])
@@ -138,5 +156,25 @@ export function mapIngestToRadarTarget(lead: IngestLead | null | undefined): Map
     scanned_at: str(lead.scanned_at) || new Date().toISOString(),
   }
 
-  return { ok: true, dedup_key: dedupKey, row }
+  const csNum = clamp(lead.cross_sell_score, 0, 6)
+  const rich: Record<string, unknown> = {
+    linkedin: str(lead.linkedin),
+    cluster: str(lead.cluster),
+    employee_count: str(lead.employee_count),
+    management: str(lead.management),
+    owner_led: str(lead.owner_led),
+    package_potential: str(lead.package_potential),
+    cross_sell_score: csNum == null ? null : Math.round(csNum),
+    key_bottlenecks: str(lead.key_bottlenecks),
+    offer_level1: str(lead.offer_level1),
+    offer_level2: str(lead.offer_level2),
+    offer_level3: str(lead.offer_level3),
+    recommended_entry: str(lead.recommended_entry),
+    hiring_signal: str(lead.hiring_signal),
+    approach_notes: str(lead.approach_notes),
+  }
+  // nur gesetzte Felder behalten
+  for (const k of Object.keys(rich)) if (rich[k] == null) delete rich[k]
+
+  return { ok: true, dedup_key: dedupKey, row, rich }
 }

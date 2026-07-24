@@ -118,6 +118,21 @@ export interface Lead {
   closer_context?: string | null
   radar_analysis?: string | null
   automation_potential?: string | null
+  // Wachstumssystem-Liste (Rich-Felder)
+  address?: string | null
+  cluster?: string | null
+  employee_count?: string | null
+  management?: string | null
+  owner_led?: string | null
+  package_potential?: string | null
+  cross_sell_score?: number | null
+  key_bottlenecks?: string | null
+  offer_level1?: string | null
+  offer_level2?: string | null
+  offer_level3?: string | null
+  recommended_entry?: string | null
+  hiring_signal?: string | null
+  approach_notes?: string | null
   created_at: string
   updated_at: string
   // joined

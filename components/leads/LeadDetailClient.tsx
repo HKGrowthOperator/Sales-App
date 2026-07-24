@@ -20,7 +20,7 @@ import { toast } from '@/lib/hooks/use-toast'
 import {
   Phone, Globe, Instagram, Linkedin, Mail, ChevronLeft,
   Building2, User, Clock, Calendar, FileText, MessageSquare,
-  ExternalLink, CheckCircle, XCircle, ArrowRight, Sparkles, Loader2
+  ExternalLink, CheckCircle, XCircle, ArrowRight, Sparkles, Loader2, Trash2
 } from 'lucide-react'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
@@ -56,6 +56,30 @@ export function LeadDetailClient({ lead: initialLead, profile, script, objection
   const [showCallForm, setShowCallForm] = useState(searchParams.get('action') === 'note')
   const [updatingStatus, setUpdatingStatus] = useState(false)
   const [researching, setResearching] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
+  async function deleteLead() {
+    if (!confirm(`Lead „${lead.company_name}" wirklich löschen? Das kann nicht rückgängig gemacht werden.`)) return
+    setDeleting(true)
+    try {
+      const res = await fetch('/api/leads/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [lead.id] }),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.ok) {
+        toast({ title: 'Löschen fehlgeschlagen', description: data.detail || data.error || `HTTP ${res.status}`, variant: 'destructive' })
+        setDeleting(false)
+      } else {
+        toast({ title: 'Lead gelöscht', description: lead.company_name })
+        router.push('/leads')
+      }
+    } catch {
+      toast({ title: 'Fehler', description: 'Lead konnte nicht gelöscht werden.', variant: 'destructive' })
+      setDeleting(false)
+    }
+  }
 
   // Research-Refresh: Website/Social/Entscheider/Pain/Automatisierung neu recherchieren
   async function runResearch() {
@@ -173,11 +197,19 @@ export function LeadDetailClient({ lead: initialLead, profile, script, objection
             <MessageSquare className="h-5 w-5 mr-2" />
             {showCallForm ? 'Schließen' : noteButtonLabel}
           </Button>
-          <Button variant="outline" size="sm" onClick={runResearch} disabled={researching}>
-            {researching
-              ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Recherchiere…</>
-              : <><Sparkles className="h-4 w-4 mr-1" /> Research aktualisieren</>}
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={runResearch} disabled={researching}>
+              {researching
+                ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Recherchiere…</>
+                : <><Sparkles className="h-4 w-4 mr-1" /> Research aktualisieren</>}
+            </Button>
+            {profile.role === 'admin' && (
+              <Button variant="outline" size="sm" onClick={deleteLead} disabled={deleting}
+                className="text-red-600 border-red-200 hover:bg-red-50">
+                {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -211,6 +243,63 @@ export function LeadDetailClient({ lead: initialLead, profile, script, objection
             </div>
           )}
         </div>
+      )}
+
+      {/* Firmenprofil & Vertriebsintelligenz (Wachstumssystem-Liste) */}
+      {(lead.cluster || lead.employee_count || lead.management || lead.package_potential
+        || lead.cross_sell_score != null || lead.key_bottlenecks || lead.hiring_signal
+        || lead.approach_notes || lead.recommended_entry || lead.owner_led) && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              🏢 Firmenprofil &amp; Vertriebsintelligenz
+              {lead.cross_sell_score != null && (
+                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                  Cross-Sell {lead.cross_sell_score}/6
+                </span>
+              )}
+              {lead.package_potential && (
+                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                  {lead.package_potential}
+                </span>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            <div className="grid sm:grid-cols-2 gap-x-6 gap-y-1.5">
+              {lead.cluster && <div><span className="text-slate-400">Cluster: </span><span className="text-slate-700">{lead.cluster}</span></div>}
+              {lead.employee_count && <div><span className="text-slate-400">Mitarbeiter: </span><span className="text-slate-700">{lead.employee_count}</span></div>}
+              {lead.management && <div><span className="text-slate-400">Geschäftsführung: </span><span className="text-slate-700">{lead.management}</span></div>}
+              {lead.owner_led && <div><span className="text-slate-400">Inhabergeführt: </span><span className="text-slate-700">{lead.owner_led}</span></div>}
+              {lead.address && <div className="sm:col-span-2"><span className="text-slate-400">Adresse: </span><span className="text-slate-700">{lead.address}</span></div>}
+            </div>
+            {lead.hiring_signal && (
+              <div className="rounded-lg bg-amber-50 border border-amber-200 p-2">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-amber-700">🔥 Akuter Anlass / Kaufsignal</span>
+                <p className="text-slate-700 mt-0.5">{lead.hiring_signal}</p>
+              </div>
+            )}
+            {lead.key_bottlenecks && (
+              <div><span className="text-slate-400">Engstellen: </span><span className="text-slate-700">{lead.key_bottlenecks}</span></div>
+            )}
+            {lead.recommended_entry && (
+              <div><span className="text-slate-400">Empfohlener Einstieg: </span><span className="text-slate-700">{lead.recommended_entry}</span></div>
+            )}
+            {(lead.offer_level1 || lead.offer_level2 || lead.offer_level3) && (
+              <div className="grid gap-1 pt-1">
+                {lead.offer_level1 && <p className="text-xs text-slate-600"><span className="font-semibold text-slate-500">Ebene 1 – Wahrnehmung: </span>{lead.offer_level1}</p>}
+                {lead.offer_level2 && <p className="text-xs text-slate-600"><span className="font-semibold text-slate-500">Ebene 2 – Gewinnung: </span>{lead.offer_level2}</p>}
+                {lead.offer_level3 && <p className="text-xs text-slate-600"><span className="font-semibold text-slate-500">Ebene 3 – Skalierung: </span>{lead.offer_level3}</p>}
+              </div>
+            )}
+            {lead.approach_notes && (
+              <div className="rounded-lg bg-slate-50 border border-slate-200 p-2">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">📌 Hinweise für Ansprache</span>
+                <p className="text-slate-700 mt-0.5">{lead.approach_notes}</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       )}
 
       {/* Call Note Form — auto-open from ?action=note */}

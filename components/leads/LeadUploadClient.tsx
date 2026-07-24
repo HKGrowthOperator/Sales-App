@@ -25,8 +25,10 @@ import {
 
 type TargetField =
   | 'company_name' | 'contact_name' | 'role_title' | 'phone' | 'email'
-  | 'website' | 'social_url' | 'industry' | 'city' | 'address'
-  | 'pain_summary' | 'ignore'
+  | 'website' | 'social_url' | 'linkedin' | 'industry' | 'city' | 'address'
+  | 'pain_summary' | 'cluster' | 'employee_count' | 'management' | 'owner_led'
+  | 'package_potential' | 'cross_sell_score' | 'key_bottlenecks'
+  | 'hiring_signal' | 'approach_notes' | 'ignore'
 
 const FIELD_LABELS: Record<TargetField, string> = {
   company_name: 'Unternehmen *',
@@ -36,27 +38,49 @@ const FIELD_LABELS: Record<TargetField, string> = {
   email: 'E-Mail',
   website: 'Website',
   social_url: 'Social Media',
-  industry: 'Branche',
+  linkedin: 'LinkedIn',
+  industry: 'Branche / Leistung',
   city: 'Stadt',
   address: 'Adresse',
+  cluster: 'Cluster',
+  employee_count: 'Mitarbeiter',
+  management: 'Geschäftsführung',
+  owner_led: 'Inhabergeführt',
+  package_potential: 'Paket-Potenzial',
+  cross_sell_score: 'Cross-Sell-Score',
+  key_bottlenecks: 'Engstellen',
+  hiring_signal: 'Akuter Anlass / Hiring',
+  approach_notes: 'Hinweise für Ansprache',
   pain_summary: 'Pain / Notiz',
   ignore: '— ignorieren —',
 }
 
 // Header-Synonyme (DE/EN) für das Auto-Mapping der Spalten.
 const HEADER_SYNONYMS: [TargetField, string[]][] = [
-  ['company_name', ['firma', 'firmenname', 'unternehmen', 'unternehmensname', 'company', 'company name', 'betrieb', 'name']],
-  ['contact_name', ['ansprechpartner', 'kontakt', 'kontaktperson', 'kontaktname', 'contact', 'contact name', 'inhaber', 'geschäftsführer', 'geschaeftsfuehrer']],
+  ['company_name', ['firma', 'firmenname', 'unternehmen', 'unternehmensname', 'company', 'company name', 'betrieb']],
+  ['management', ['geschäftsführung', 'geschaeftsfuehrung', 'geschäftsführer', 'gf', 'management', 'leitung']],
+  ['contact_name', ['ansprechpartner', 'kontakt', 'kontaktperson', 'kontaktname', 'contact', 'contact name', 'inhaber']],
   ['role_title', ['position', 'rolle', 'funktion', 'role', 'title', 'titel']],
   ['phone', ['telefon', 'telefonnummer', 'tel', 'tel.', 'phone', 'phone number', 'mobil', 'handy', 'mobile']],
   ['email', ['email', 'e-mail', 'mail', 'e-mail-adresse', 'emailadresse']],
   ['website', ['website', 'webseite', 'web', 'url', 'homepage', 'domain', 'internetseite']],
-  ['social_url', ['instagram', 'social', 'social media', 'facebook', 'linkedin', 'insta']],
-  ['industry', ['branche', 'industry', 'gewerbe', 'kategorie', 'sector']],
+  ['social_url', ['instagram', 'social', 'social media', 'facebook', 'insta']],
+  ['linkedin', ['linkedin']],
+  ['cluster', ['cluster', 'segment', 'gruppe']],
+  ['industry', ['branche', 'branche / leistung', 'leistung', 'industry', 'gewerbe', 'kategorie', 'sector']],
+  ['employee_count', ['mitarbeiter', 'mitarbeiterzahl', 'employees', 'ma', 'größe', 'groesse', 'size']],
+  ['owner_led', ['inhabergeführt', 'inhabergefuehrt', 'owner-led', 'familiengeführt']],
+  ['package_potential', ['paket-potenzial', 'paket', 'potenzial', 'package']],
+  ['cross_sell_score', ['cross-sell-score', 'cross-sell-score (0–6)', 'cross sell', 'cross-sell', 'score']],
+  ['key_bottlenecks', ['klare engstellen', 'engstellen', 'engstelle', 'bottleneck', 'schwachstellen']],
+  ['hiring_signal', ['akuter anlass', 'akuter anlass (aktuelles hiring o.ä.)', 'anlass', 'hiring', 'kaufsignal']],
+  ['approach_notes', ['hinweise für ansprache', 'hinweise', 'ansprache', 'approach', 'note für ansprache']],
   ['city', ['stadt', 'ort', 'city', 'standort']],
   ['address', ['adresse', 'address', 'anschrift', 'straße', 'strasse', 'street']],
   ['pain_summary', ['pain', 'notiz', 'notizen', 'notes', 'note', 'bemerkung', 'bemerkungen', 'kommentar', 'beschreibung']],
 ]
+
+// linkedin ist kein IngestLead-Direktfeld → beim Bauen auf social_url-Fallback abbilden.
 
 function autoMapHeader(header: string, taken: Set<TargetField>): TargetField {
   const h = header.trim().toLowerCase()
@@ -217,6 +241,13 @@ export function LeadUploadClient({ profile, allProfiles }: Props) {
           lead.decision_maker = { ...(lead.decision_maker || {}), name: v }
         } else if (field === 'role_title') {
           lead.decision_maker = { ...(lead.decision_maker || {}), role: v }
+        } else if (field === 'management') {
+          // Geschäftsführung: als management-Feld + Fallback-Ansprechpartner (erster Name)
+          lead.management = v
+          if (!lead.decision_maker?.name) {
+            const first = v.split(/[,;·]/)[0].trim()
+            if (first) lead.decision_maker = { ...(lead.decision_maker || {}), name: first }
+          }
         } else {
           lead[field] = v
         }

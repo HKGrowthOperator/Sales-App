@@ -2,13 +2,15 @@
 
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Profile, Lead, LeadStatus, LeadScore, OPENER_STATUSES, SETTER_STATUSES, CLOSER_STATUSES } from '@/lib/types'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { StatusBadge, ScoreBadge } from '@/components/shared/StatusBadge'
 import { getEntryAngleEmoji, formatDate, timeAgo } from '@/lib/utils'
-import { Search, Phone, Globe, ChevronRight, Filter, Plus, Upload } from 'lucide-react'
+import { toast } from '@/lib/hooks/use-toast'
+import { Search, Phone, Globe, ChevronRight, Filter, Plus, Upload, Trash2, CheckSquare, Square, X, Loader2 } from 'lucide-react'
 
 const ALL_STATUSES: LeadStatus[] = [
   'Neu', 'Zu kontaktieren', 'Nicht erreicht', 'Interessiert',
@@ -30,11 +32,49 @@ interface Props {
 }
 
 export function LeadsListClient({ profile, initialLeads }: Props) {
+  const router = useRouter()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<LeadStatus | 'alle'>('alle')
   const [scoreFilter, setScoreFilter] = useState<LeadScore | 'alle'>('alle')
+  const [selectMode, setSelectMode] = useState(false)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [deleting, setDeleting] = useState(false)
 
   const relevantStatuses = ROLE_STATUS_MAP[profile.role] || ALL_STATUSES
+
+  function toggle(id: string) {
+    setSelected(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  async function deleteSelected() {
+    if (!selected.size) return
+    if (!confirm(`${selected.size} Lead(s) wirklich löschen? Das kann nicht rückgängig gemacht werden.`)) return
+    setDeleting(true)
+    try {
+      const res = await fetch('/api/leads/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: Array.from(selected) }),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.ok) {
+        toast({ title: 'Löschen fehlgeschlagen', description: data.detail || data.error || `HTTP ${res.status}`, variant: 'destructive' })
+      } else {
+        toast({ title: `${data.deleted} Lead(s) gelöscht` })
+        setSelected(new Set())
+        setSelectMode(false)
+        router.refresh()
+      }
+    } catch {
+      toast({ title: 'Fehler', description: 'Löschen nicht möglich.', variant: 'destructive' })
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   const filtered = useMemo(() => {
     return initialLeads.filter(lead => {
@@ -63,6 +103,13 @@ export function LeadsListClient({ profile, initialLeads }: Props) {
           <p className="text-slate-500 text-sm">{filtered.length} von {initialLeads.length} Leads</p>
         </div>
         <div className="flex gap-2">
+          <Button
+            variant={selectMode ? 'default' : 'outline'}
+            onClick={() => { setSelectMode(m => !m); setSelected(new Set()) }}
+            className={selectMode ? 'bg-slate-700 hover:bg-slate-800' : ''}
+          >
+            {selectMode ? <><X className="h-4 w-4 mr-1" /> Fertig</> : <><CheckSquare className="h-4 w-4 mr-1" /> Auswählen</>}
+          </Button>
           <Link href="/leads/upload">
             <Button variant="outline">
               <Upload className="h-4 w-4 mr-1" /> Importieren
@@ -75,6 +122,33 @@ export function LeadsListClient({ profile, initialLeads }: Props) {
           </Link>
         </div>
       </div>
+
+      {/* Auswahl-Aktionsleiste */}
+      {selectMode && (
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2">
+          <div className="flex items-center gap-3 text-sm">
+            <button
+              onClick={() => setSelected(new Set(selected.size === filtered.length ? [] : filtered.map(l => l.id)))}
+              className="flex items-center gap-1.5 text-slate-600 hover:text-slate-900"
+            >
+              {selected.size === filtered.length && filtered.length > 0
+                ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+              Alle ({filtered.length})
+            </button>
+            <span className="text-slate-500">{selected.size} ausgewählt</span>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={deleteSelected}
+            disabled={!selected.size || deleting}
+            className="text-red-600 border-red-200 hover:bg-red-50"
+          >
+            {deleting ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Trash2 className="h-4 w-4 mr-1" />}
+            Löschen
+          </Button>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
@@ -139,11 +213,18 @@ export function LeadsListClient({ profile, initialLeads }: Props) {
             <p className="text-sm">Passe den Filter an oder füge einen neuen Lead hinzu</p>
           </div>
         ) : (
-          filtered.map(lead => (
-            <Link key={lead.id} href={`/leads/${lead.id}`}>
-              <Card className="hover:shadow-md transition-all hover:border-blue-200 cursor-pointer">
+          filtered.map(lead => {
+            const inner = (
+              <Card className={`transition-all ${selectMode
+                ? (selected.has(lead.id) ? 'border-blue-400 bg-blue-50/40' : 'hover:border-blue-200')
+                : 'hover:shadow-md hover:border-blue-200'} cursor-pointer`}>
                 <CardContent className="p-4">
                   <div className="flex items-center gap-3">
+                    {selectMode && (
+                      selected.has(lead.id)
+                        ? <CheckSquare className="h-5 w-5 text-blue-600 shrink-0" />
+                        : <Square className="h-5 w-5 text-slate-300 shrink-0" />
+                    )}
                     <ScoreBadge score={lead.lead_score} />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
@@ -170,12 +251,17 @@ export function LeadsListClient({ profile, initialLeads }: Props) {
                         <p className="text-xs text-slate-400 mt-1">Letzter Kontakt: {timeAgo(lead.last_contact_at)}</p>
                       )}
                     </div>
-                    <ChevronRight className="h-5 w-5 text-slate-300 shrink-0" />
+                    {!selectMode && <ChevronRight className="h-5 w-5 text-slate-300 shrink-0" />}
                   </div>
                 </CardContent>
               </Card>
-            </Link>
-          ))
+            )
+            return selectMode ? (
+              <div key={lead.id} onClick={() => toggle(lead.id)}>{inner}</div>
+            ) : (
+              <Link key={lead.id} href={`/leads/${lead.id}`}>{inner}</Link>
+            )
+          })
         )}
       </div>
     </div>
