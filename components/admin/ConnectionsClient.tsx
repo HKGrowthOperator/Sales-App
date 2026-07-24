@@ -38,7 +38,10 @@ export function ConnectionsClient({ health, flags: initialFlags }: { health: Hea
     }
     setSavingKey(key)
     setFlags(f => ({ ...f, [key]: next }))
-    const { error } = await createClient().from('app_settings').update({ value: next, updated_at: new Date().toISOString() }).eq('key', key)
+    // Upsert statt Update: app_settings kann leer sein (sonst würde der Schalter still fehlschlagen).
+    const { error } = await createClient()
+      .from('app_settings')
+      .upsert({ key, value: next, updated_at: new Date().toISOString() }, { onConflict: 'key' })
     setSavingKey(null)
     if (error) { setFlags(f => ({ ...f, [key]: !next })); toast({ title: 'Fehler', description: error.message, variant: 'destructive' }); return }
     toast({ title: 'Gespeichert', description: `${key} = ${next}` })
