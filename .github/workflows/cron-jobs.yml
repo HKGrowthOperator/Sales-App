@@ -1,0 +1,45 @@
+name: Sales-App Jobs (Reminder & Mailversand)
+
+# Stößt den Job-Runner der Sales App regelmäßig an, damit Termin-Erinnerungen,
+# Mailversand und Kalender-Sync automatisch laufen. Ohne diesen Auslöser (oder
+# einen gleichwertigen Coolify-Cron) verarbeitet die App fällige Jobs nur, wenn
+# ein Admin manuell "Jobs jetzt ausführen" klickt.
+#
+# Voraussetzungen (einmalig einrichten):
+#   1. Repo-Secrets setzen: Settings → Secrets and variables → Actions
+#        APP_URL      = https://<deine-sales-app-domain>        (ohne / am Ende)
+#        CRON_SECRET  = ein langes zufälliges Geheimnis
+#   2. In Coolify dieselbe CRON_SECRET als Env-Variable der App setzen.
+#      (Der Endpoint akzeptiert x-cron-secret == CRON_SECRET.)
+#
+# Hinweis: GitHub-Cron kann sich unter Last um einige Minuten verzögern — für
+# 24h-/1h-Reminder völlig ausreichend. Wer es taktgenauer will, richtet in
+# Coolify einen Scheduled-Task ein, der denselben Endpoint aufruft.
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'   # alle 10 Minuten
+  workflow_dispatch: {}       # manuell auslösbar (Actions-Tab → Run workflow)
+
+jobs:
+  run-due-jobs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Job-Runner anstoßen
+        run: |
+          if [ -z "${{ secrets.APP_URL }}" ] || [ -z "${{ secrets.CRON_SECRET }}" ]; then
+            echo "APP_URL oder CRON_SECRET Secret fehlt — bitte in den Repo-Secrets setzen."
+            exit 1
+          fi
+          code=$(curl -sS -o /tmp/body.json -w "%{http_code}" \
+            -X POST "${{ secrets.APP_URL }}/api/jobs/run" \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
+            --max-time 90 || echo "000")
+          echo "HTTP $code"
+          cat /tmp/body.json || true
+          echo
+          # 2xx = ok. Nicht-2xx als Fehler melden, damit man es im Actions-Log sieht.
+          case "$code" in
+            2*) echo "OK";;
+            *)  echo "Job-Runner-Aufruf fehlgeschlagen (HTTP $code)"; exit 1;;
+          esac
