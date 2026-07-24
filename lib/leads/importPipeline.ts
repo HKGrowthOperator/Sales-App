@@ -73,8 +73,14 @@ function leadFromRow(
     : area === 'KI-Integration' ? 'KI-Zeitersparnis'
     : null
   const missing = missingForOpener(row)
+  // "Nicht ansprechen"-Hinweise → Lead wird gesperrt (do_not_contact),
+  // erscheint damit NICHT in der Dialer-Queue, bis ein Admin freigibt.
+  const hintText = String((rich?.approach_notes as string) || '')
+  const blocked = /nicht\s*(mehr)?\s*ansprechen|nicht\s*kontaktieren|do\s*not\s*contact/i.test(hintText)
   const lead = {
     company_name: row.company_name,
+    // Rollenwörter/GF-Namen NIE automatisch als Ansprechpartner — bleibt leer,
+    // bis ein echter Entscheider ermittelt/ausgewählt ist.
     contact_name: row.decision_maker_name ?? null,
     role_title: row.decision_maker_role ?? null,
     phone: row.phone ?? null,
@@ -98,6 +104,7 @@ function leadFromRow(
     dedup_key: key,
     ...(opts.assignedTo ? { assigned_to: opts.assignedTo } : {}),
     ...(rich || {}),
+    ...(blocked ? { do_not_contact: true, opt_out_reason: 'Hinweis: nicht ansprechen', opt_out_at: new Date().toISOString() } : {}),
   }
   return { lead, missing }
 }

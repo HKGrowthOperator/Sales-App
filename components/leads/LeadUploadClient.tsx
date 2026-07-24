@@ -242,12 +242,10 @@ export function LeadUploadClient({ profile, allProfiles }: Props) {
         } else if (field === 'role_title') {
           lead.decision_maker = { ...(lead.decision_maker || {}), role: v }
         } else if (field === 'management') {
-          // Geschäftsführung: als management-Feld + Fallback-Ansprechpartner (erster Name)
+          // Geschäftsführung NUR als Rohwert speichern — NIE als Ansprechpartner/
+          // Vorname setzen (Rollenwörter/mehrere Personen). Strukturierte
+          // Entscheider werden separat aus diesem Rohwert geparst.
           lead.management = v
-          if (!lead.decision_maker?.name) {
-            const first = v.split(/[,;·]/)[0].trim()
-            if (first) lead.decision_maker = { ...(lead.decision_maker || {}), name: first }
-          }
         } else {
           lead[field] = v
         }
