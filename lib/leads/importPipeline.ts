@@ -5,6 +5,8 @@ import { classifyFit } from '@/lib/radar/exclude'
 import { researchEnabled, researchBatch } from '@/lib/radar/research'
 import { toLeadContract, isLeadQualified } from '@/lib/radar/leadContract.mjs'
 import { sendLead } from '@/lib/radar/sendLead.mjs'
+import { parseDecisionMakers } from '@/lib/leads/decisionMakers'
+import { parseEmployeeCount } from '@/lib/leads/normalize'
 
 // ============================================================
 // Gemeinsame Lead-Import-Pipeline — genutzt vom Radar-Ingest
@@ -77,7 +79,8 @@ function leadFromRow(
   // erscheint damit NICHT in der Dialer-Queue, bis ein Admin freigibt.
   const hintText = String((rich?.approach_notes as string) || '')
   const blocked = /nicht\s*(mehr)?\s*ansprechen|nicht\s*kontaktieren|do\s*not\s*contact/i.test(hintText)
-  const lead = {
+  const ec = rich?.employee_count ? parseEmployeeCount(rich.employee_count as string) : { min: null, max: null }
+  const lead: Record<string, unknown> = {
     company_name: row.company_name,
     // Rollenwörter/GF-Namen NIE automatisch als Ansprechpartner — bleibt leer,
     // bis ein echter Entscheider ermittelt/ausgewählt ist.
@@ -105,8 +108,31 @@ function leadFromRow(
     ...(opts.assignedTo ? { assigned_to: opts.assignedTo } : {}),
     ...(rich || {}),
     ...(blocked ? { do_not_contact: true, opt_out_reason: 'Hinweis: nicht ansprechen', opt_out_at: new Date().toISOString() } : {}),
+    ...(ec.min != null ? { employee_count_min: ec.min } : {}),
+    ...(ec.max != null ? { employee_count_max: ec.max } : {}),
   }
   return { lead, missing }
+}
+
+/** Baut aus dem "Geschäftsführung"-Rohwert die decision_makers-Zeilen für einen Lead.
+ *  Genau ein widerspruchsfreier Entscheider wird als primär markiert. */
+function decisionMakerRows(leadId: string, rawManagement: string | null | undefined) {
+  const parsed = parseDecisionMakers(rawManagement)
+  if (!parsed.people.length) return { rows: [] as Record<string, unknown>[], primaryName: null as string | null }
+  const onlyOne = parsed.people.length === 1 && !parsed.hasConflict
+  const rows = parsed.people.map((p, i) => ({
+    lead_id: leadId,
+    full_name: p.fullName,
+    first_name: p.firstName,
+    last_name: p.lastName,
+    title: p.title,
+    note: p.note,
+    raw: parsed.raw,
+    source: 'Leadliste',
+    verification_status: parsed.hasConflict ? 'widersprüchlich' : 'verifiziert',
+    is_primary: onlyOne && i === 0,
+  }))
+  return { rows, primaryName: onlyOne ? parsed.people[0].fullName : null }
 }
 
 export async function runLeadImportPipeline(
@@ -321,6 +347,20 @@ export async function runLeadImportPipeline(
       results[idx].lead_id = leadRow!.id
       results[idx].lead = missing.length ? 'created_needs_enrichment' : 'created'
       if (missing.length) results[idx].missing = missing
+
+      // c) Entscheider aus "Geschäftsführung" persistieren (best-effort).
+      //    Genau ein widerspruchsfreier Entscheider → primär + als contact_name.
+      const { rows: dmRows, primaryName } = decisionMakerRows(leadRow!.id, m.rich?.management as string)
+      if (dmRows.length) {
+        const { data: inserted } = await svc.from('decision_makers').insert(dmRows).select('id, is_primary')
+        const primary = (inserted || []).find((d: any) => d.is_primary)
+        if (primary) {
+          await svc.from('leads').update({
+            primary_decision_maker_id: primary.id,
+            contact_name: primaryName,
+          }).eq('id', leadRow!.id)
+        }
+      }
     }
   }
 

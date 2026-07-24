@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Lead, Profile, Script, CallNote, ObjectionItem, LeadStatus, OPENER_STATUSES, SETTER_STATUSES, CLOSER_STATUSES } from '@/lib/types'
+import { Lead, Profile, Script, CallNote, ObjectionItem, DecisionMaker, LeadStatus, OPENER_STATUSES, SETTER_STATUSES, CLOSER_STATUSES } from '@/lib/types'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -16,6 +16,7 @@ import { TimelineEvent } from '@/lib/leads/timeline'
 import { NextActionBox, LeadTimeline, AppointmentsSection, MailsSection, FollowupsSection, AutomationSection } from '@/components/leads/LeadDossierSections'
 import { formatDateTime, formatDate, getEntryAngleEmoji, timeAgo, stripMarkdown } from '@/lib/utils'
 import { decisionMakerSummary } from '@/lib/leads/decisionMakers'
+import { formatRevenue } from '@/lib/leads/normalize'
 import { deriveWarnings, callReadiness, READINESS_LABEL, READINESS_STYLE, SEVERITY_STYLE } from '@/lib/leads/warnings'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from '@/lib/hooks/use-toast'
@@ -49,9 +50,10 @@ interface Props {
   followups?: any[]
   mails?: any[]
   automationLogs?: any[]
+  decisionMakers?: DecisionMaker[]
 }
 
-export function LeadDetailClient({ lead: initialLead, profile, script, objections = [], allProfiles, nextAction, timeline = [], dossierAppointments = [], followups = [], mails = [], automationLogs = [] }: Props) {
+export function LeadDetailClient({ lead: initialLead, profile, script, objections = [], allProfiles, nextAction, timeline = [], dossierAppointments = [], followups = [], mails = [], automationLogs = [], decisionMakers = [] }: Props) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [lead, setLead] = useState(initialLead)
@@ -62,10 +64,31 @@ export function LeadDetailClient({ lead: initialLead, profile, script, objection
   const [deleting, setDeleting] = useState(false)
   const [releasing, setReleasing] = useState(false)
 
+  const [dmState, setDmState] = useState<DecisionMaker[]>(decisionMakers)
+  const [settingPrimary, setSettingPrimary] = useState<string | null>(null)
+
   // Abgeleitete Vertriebs-Intelligenz (rein aus vorhandenen Feldern)
   const warnings = deriveWarnings(lead)
   const readiness = callReadiness(lead, warnings)
   const dm = decisionMakerSummary(lead.management)
+
+  // Primären Entscheider wählen (persistiert + als Ansprechpartner setzen)
+  async function setPrimary(person: DecisionMaker) {
+    setSettingPrimary(person.id)
+    const supabase = createClient()
+    await supabase.from('decision_makers').update({ is_primary: false }).eq('lead_id', lead.id)
+    await supabase.from('decision_makers').update({ is_primary: true }).eq('id', person.id)
+    const { error } = await supabase.from('leads')
+      .update({ primary_decision_maker_id: person.id, contact_name: person.full_name, updated_at: new Date().toISOString() })
+      .eq('id', lead.id)
+    if (error) toast({ title: 'Fehler', description: error.message, variant: 'destructive' })
+    else {
+      setDmState(prev => prev.map(d => ({ ...d, is_primary: d.id === person.id })))
+      setLead({ ...lead, contact_name: person.full_name, primary_decision_maker_id: person.id })
+      toast({ title: 'Primärer Entscheider gesetzt', description: person.full_name })
+    }
+    setSettingPrimary(null)
+  }
 
   // Admin: gesperrten Lead ("Nicht ansprechen") freigeben
   async function releaseLead() {
@@ -259,24 +282,43 @@ export function LeadDetailClient({ lead: initialLead, profile, script, objection
         </div>
       )}
 
-      {/* Entscheider (aus verifizierter Geschäftsführung geparst) */}
-      {dm.people.length > 0 && (
+      {/* Entscheider — persistiert (auswählbarer Primär) oder aus String geparst */}
+      {(dmState.length > 0 || dm.people.length > 0) && (
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
               <Users className="h-4 w-4 text-slate-400" /> Entscheider
-              {dm.multiple && <span className="text-xs font-normal text-amber-600">— bitte primären auswählen</span>}
-              {dm.conflict && <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">widersprüchlich – prüfen</span>}
+              {((dmState.length > 1 && !dmState.some(d => d.is_primary)) || (!dmState.length && dm.multiple)) &&
+                <span className="text-xs font-normal text-amber-600">— bitte primären auswählen</span>}
+              {(dmState.some(d => d.verification_status === 'widersprüchlich') || (!dmState.length && dm.conflict)) &&
+                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">widersprüchlich – prüfen</span>}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-1.5">
-            {dm.people.map((p, i) => (
-              <div key={i} className="flex items-center gap-2 text-sm">
-                <User className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                <span className="font-medium text-slate-800">{p.fullName}</span>
-                {p.note && <span className="text-xs text-slate-400">({stripMarkdown(p.note)})</span>}
-              </div>
-            ))}
+            {dmState.length > 0 ? (
+              dmState.map((p) => (
+                <div key={p.id} className="flex items-center gap-2 text-sm">
+                  <User className={`h-3.5 w-3.5 shrink-0 ${p.is_primary ? 'text-blue-600' : 'text-slate-400'}`} />
+                  <span className={`font-medium ${p.is_primary ? 'text-blue-700' : 'text-slate-800'}`}>{p.full_name}</span>
+                  {p.role_title && <span className="text-xs text-slate-400">· {p.role_title}</span>}
+                  {p.note && <span className="text-xs text-slate-400">({stripMarkdown(p.note)})</span>}
+                  {p.is_primary
+                    ? <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600 ml-1">primär</span>
+                    : <button onClick={() => setPrimary(p)} disabled={settingPrimary === p.id}
+                        className="ml-auto text-xs text-slate-500 hover:text-blue-600 underline shrink-0">
+                        {settingPrimary === p.id ? '…' : 'Als primär'}
+                      </button>}
+                </div>
+              ))
+            ) : (
+              dm.people.map((p, i) => (
+                <div key={i} className="flex items-center gap-2 text-sm">
+                  <User className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                  <span className="font-medium text-slate-800">{p.fullName}</span>
+                  {p.note && <span className="text-xs text-slate-400">({stripMarkdown(p.note)})</span>}
+                </div>
+              ))
+            )}
             <p className="text-[11px] text-slate-400 pt-1">Quelle: verifizierte Geschäftsführung aus der Leadliste.</p>
           </CardContent>
         </Card>
@@ -338,6 +380,9 @@ export function LeadDetailClient({ lead: initialLead, profile, script, objection
             <div className="grid sm:grid-cols-2 gap-x-6 gap-y-1.5">
               {lead.cluster && <div><span className="text-slate-400">Cluster: </span><span className="text-slate-700">{lead.cluster}</span></div>}
               {lead.employee_count && <div><span className="text-slate-400">Mitarbeiter: </span><span className="text-slate-700">{lead.employee_count}</span></div>}
+              {lead.open_positions_raw && <div><span className="text-slate-400">Offene Stellen: </span><span className="text-slate-700">{stripMarkdown(lead.open_positions_raw)}</span></div>}
+              <div><span className="text-slate-400">Umsatz: </span><span className="text-slate-700">{formatRevenue(lead)}</span></div>
+              {lead.verification_status && <div><span className="text-slate-400">Verifizierung: </span><span className="text-slate-700">{lead.verification_status}</span></div>}
               {lead.management && <div><span className="text-slate-400">Geschäftsführung: </span><span className="text-slate-700">{lead.management}</span></div>}
               {lead.owner_led && <div><span className="text-slate-400">Inhabergeführt: </span><span className="text-slate-700">{lead.owner_led}</span></div>}
               {lead.address && <div className="sm:col-span-2"><span className="text-slate-400">Adresse: </span><span className="text-slate-700">{lead.address}</span></div>}

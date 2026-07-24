@@ -133,6 +133,21 @@ export interface Lead {
   recommended_entry?: string | null
   hiring_signal?: string | null
   approach_notes?: string | null
+  buy_signal?: string | null
+  entry_point?: string | null
+  verification_status?: string | null
+  open_positions_raw?: string | null
+  employee_count_min?: number | null
+  employee_count_max?: number | null
+  primary_decision_maker_id?: string | null
+  // Umsatz (optional, nie erfunden)
+  revenue_amount?: number | null
+  revenue_currency?: string | null
+  revenue_period?: 'monat' | 'jahr' | null
+  revenue_is_estimate?: boolean | null
+  revenue_source?: string | null
+  revenue_confidence?: number | null
+  revenue_raw?: string | null
   created_at: string
   updated_at: string
   // joined
@@ -140,6 +155,25 @@ export interface Lead {
   closer_profile?: Profile | null
   call_notes?: CallNote[]
   appointments?: Appointment[]
+  decision_makers?: DecisionMaker[]
+}
+
+export interface DecisionMaker {
+  id: string
+  lead_id: string
+  full_name: string
+  first_name: string | null
+  last_name: string | null
+  title: string | null
+  role_title: string | null
+  is_primary: boolean
+  verification_status: string | null
+  source: string | null
+  verified_at: string | null
+  note: string | null
+  raw: string | null
+  created_at: string
+  updated_at: string
 }
 
 export interface CallNote {
