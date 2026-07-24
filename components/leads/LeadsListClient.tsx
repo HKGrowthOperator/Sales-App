@@ -9,8 +9,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { StatusBadge, ScoreBadge } from '@/components/shared/StatusBadge'
 import { getEntryAngleEmoji, formatDate, timeAgo } from '@/lib/utils'
+import { deriveWarnings, topSeverity } from '@/lib/leads/warnings'
 import { toast } from '@/lib/hooks/use-toast'
-import { Search, Phone, Globe, ChevronRight, Filter, Plus, Upload, Trash2, CheckSquare, Square, X, Loader2 } from 'lucide-react'
+import { Search, Phone, Globe, ChevronRight, Filter, Plus, Upload, Trash2, CheckSquare, Square, X, Loader2, ShieldAlert, AlertTriangle } from 'lucide-react'
 
 const ALL_STATUSES: LeadStatus[] = [
   'Neu', 'Zu kontaktieren', 'Nicht erreicht', 'Interessiert',
@@ -229,6 +230,12 @@ export function LeadsListClient({ profile, initialLeads }: Props) {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-base font-semibold text-slate-900 truncate">{lead.company_name}</span>
+                        {(() => {
+                          const sev = topSeverity(deriveWarnings(lead))
+                          if (sev === 'gesperrt') return <span title="Nicht ansprechen"><ShieldAlert className="h-4 w-4 text-zinc-700" /></span>
+                          if (sev === 'kritisch') return <span title="Kritisch – vor Anruf prüfen"><AlertTriangle className="h-4 w-4 text-red-500" /></span>
+                          return null
+                        })()}
                         <StatusBadge status={lead.status} />
                         {lead.entry_angle && (
                           <span className="text-xs text-slate-400">{getEntryAngleEmoji(lead.entry_angle)} {lead.entry_angle}</span>

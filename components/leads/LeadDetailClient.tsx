@@ -14,13 +14,16 @@ import { ScriptPanel } from '@/components/leads/ScriptPanel'
 import { NextAction } from '@/lib/leads/nextAction'
 import { TimelineEvent } from '@/lib/leads/timeline'
 import { NextActionBox, LeadTimeline, AppointmentsSection, MailsSection, FollowupsSection, AutomationSection } from '@/components/leads/LeadDossierSections'
-import { formatDateTime, formatDate, getEntryAngleEmoji, timeAgo } from '@/lib/utils'
+import { formatDateTime, formatDate, getEntryAngleEmoji, timeAgo, stripMarkdown } from '@/lib/utils'
+import { decisionMakerSummary } from '@/lib/leads/decisionMakers'
+import { deriveWarnings, callReadiness, READINESS_LABEL, READINESS_STYLE, SEVERITY_STYLE } from '@/lib/leads/warnings'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from '@/lib/hooks/use-toast'
 import {
   Phone, Globe, Instagram, Linkedin, Mail, ChevronLeft,
   Building2, User, Clock, Calendar, FileText, MessageSquare,
-  ExternalLink, CheckCircle, XCircle, ArrowRight, Sparkles, Loader2, Trash2
+  ExternalLink, CheckCircle, XCircle, ArrowRight, Sparkles, Loader2, Trash2,
+  AlertTriangle, ShieldAlert, Users, Lock, Unlock
 } from 'lucide-react'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
@@ -57,6 +60,25 @@ export function LeadDetailClient({ lead: initialLead, profile, script, objection
   const [updatingStatus, setUpdatingStatus] = useState(false)
   const [researching, setResearching] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [releasing, setReleasing] = useState(false)
+
+  // Abgeleitete Vertriebs-Intelligenz (rein aus vorhandenen Feldern)
+  const warnings = deriveWarnings(lead)
+  const readiness = callReadiness(lead, warnings)
+  const dm = decisionMakerSummary(lead.management)
+
+  // Admin: gesperrten Lead ("Nicht ansprechen") freigeben
+  async function releaseLead() {
+    setReleasing(true)
+    const supabase = createClient()
+    const { error } = await supabase
+      .from('leads')
+      .update({ do_not_contact: false, opt_out_at: null, opt_out_reason: null, updated_at: new Date().toISOString() })
+      .eq('id', lead.id)
+    if (error) toast({ title: 'Fehler', description: error.message, variant: 'destructive' })
+    else { setLead({ ...lead, do_not_contact: false }); toast({ title: 'Lead freigegeben', description: 'Erscheint wieder in der Call-Queue.' }); router.refresh() }
+    setReleasing(false)
+  }
 
   async function deleteLead() {
     if (!confirm(`Lead „${lead.company_name}" wirklich löschen? Das kann nicht rückgängig gemacht werden.`)) return
@@ -175,18 +197,21 @@ export function LeadDetailClient({ lead: initialLead, profile, script, objection
             <ScoreBadge score={lead.lead_score} />
             <h1 className="text-2xl font-bold text-slate-900">{lead.company_name}</h1>
             <StatusBadge status={lead.status} />
+            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${READINESS_STYLE[readiness]}`}>
+              {READINESS_LABEL[readiness]}
+            </span>
           </div>
-          {lead.contact_name && (
-            <p className="text-slate-500 mt-1">
-              {lead.contact_name}
-              {lead.role_title ? ` · ${lead.role_title}` : ''}
-              {lead.phone && (
-                <a href={`tel:${lead.phone}`} className="ml-3 text-blue-600 font-semibold hover:underline">
-                  {lead.phone}
-                </a>
-              )}
-            </p>
-          )}
+          <p className="text-slate-500 mt-1">
+            {lead.contact_name || (
+              <span className={dm.multiple ? 'text-amber-600 font-medium' : 'text-slate-400 italic'}>{dm.label}</span>
+            )}
+            {lead.role_title ? ` · ${lead.role_title}` : ''}
+            {lead.phone && (
+              <a href={`tel:${lead.phone}`} className="ml-3 text-blue-600 font-semibold hover:underline">
+                {lead.phone}
+              </a>
+            )}
+          </p>
         </div>
         <div className="flex flex-col items-end gap-2 shrink-0">
           <Button
@@ -212,6 +237,50 @@ export function LeadDetailClient({ lead: initialLead, profile, script, objection
           </div>
         </div>
       </div>
+
+      {/* Warnungen & Call-Readiness (strukturiert, nicht in Notizen versteckt) */}
+      {warnings.length > 0 && (
+        <div className="space-y-2">
+          {warnings.map((w, i) => (
+            <div key={i} className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-sm ${SEVERITY_STYLE[w.severity]}`}>
+              {w.severity === 'gesperrt' ? <ShieldAlert className="h-4 w-4 mt-0.5 shrink-0" />
+                : w.severity === 'kritisch' ? <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                : <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0 opacity-70" />}
+              <span className="font-medium">{w.label}</span>
+              {w.detail && <span className="opacity-80">— {stripMarkdown(w.detail)}</span>}
+              {w.severity === 'gesperrt' && profile.role === 'admin' && (
+                <button onClick={releaseLead} disabled={releasing}
+                  className="ml-auto text-xs underline flex items-center gap-1 shrink-0">
+                  <Unlock className="h-3 w-3" /> Freigeben
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Entscheider (aus verifizierter Geschäftsführung geparst) */}
+      {dm.people.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Users className="h-4 w-4 text-slate-400" /> Entscheider
+              {dm.multiple && <span className="text-xs font-normal text-amber-600">— bitte primären auswählen</span>}
+              {dm.conflict && <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">widersprüchlich – prüfen</span>}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1.5">
+            {dm.people.map((p, i) => (
+              <div key={i} className="flex items-center gap-2 text-sm">
+                <User className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                <span className="font-medium text-slate-800">{p.fullName}</span>
+                {p.note && <span className="text-xs text-slate-400">({stripMarkdown(p.note)})</span>}
+              </div>
+            ))}
+            <p className="text-[11px] text-slate-400 pt-1">Quelle: verifizierte Geschäftsführung aus der Leadliste.</p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Next Action — operativer Kompass */}
       {nextAction && <NextActionBox action={nextAction} />}
@@ -276,11 +345,11 @@ export function LeadDetailClient({ lead: initialLead, profile, script, objection
             {lead.hiring_signal && (
               <div className="rounded-lg bg-amber-50 border border-amber-200 p-2">
                 <span className="text-[11px] font-bold uppercase tracking-wider text-amber-700">🔥 Akuter Anlass / Kaufsignal</span>
-                <p className="text-slate-700 mt-0.5">{lead.hiring_signal}</p>
+                <p className="text-slate-700 mt-0.5">{stripMarkdown(lead.hiring_signal)}</p>
               </div>
             )}
             {lead.key_bottlenecks && (
-              <div><span className="text-slate-400">Engstellen: </span><span className="text-slate-700">{lead.key_bottlenecks}</span></div>
+              <div><span className="text-slate-400">Engstellen: </span><span className="text-slate-700">{stripMarkdown(lead.key_bottlenecks)}</span></div>
             )}
             {lead.recommended_entry && (
               <div><span className="text-slate-400">Empfohlener Einstieg: </span><span className="text-slate-700">{lead.recommended_entry}</span></div>
@@ -295,7 +364,7 @@ export function LeadDetailClient({ lead: initialLead, profile, script, objection
             {lead.approach_notes && (
               <div className="rounded-lg bg-slate-50 border border-slate-200 p-2">
                 <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">📌 Hinweise für Ansprache</span>
-                <p className="text-slate-700 mt-0.5">{lead.approach_notes}</p>
+                <p className="text-slate-700 mt-0.5">{stripMarkdown(lead.approach_notes)}</p>
               </div>
             )}
           </CardContent>

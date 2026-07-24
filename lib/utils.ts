@@ -126,6 +126,21 @@ export function fillEmailTemplate(template: string, variables: Record<string, st
   return result
 }
 
+/** Entfernt Markdown-Marker (**fett**, *kursiv*, `code`, # …) für die reine
+ *  Text-Anzeige — verhindert sichtbare Sternchen aus importierten Feldern. */
+export function stripMarkdown(input: string | null | undefined): string {
+  if (!input) return ''
+  return String(input)
+    .replace(/\*\*(.+?)\*\*/g, '$1')   // **fett**
+    .replace(/__(.+?)__/g, '$1')        // __fett__
+    .replace(/(^|\s)\*(?!\s)(.+?)\*/g, '$1$2') // *kursiv*
+    .replace(/(^|\s)_(?!\s)(.+?)_/g, '$1$2')   // _kursiv_
+    .replace(/`([^`]+)`/g, '$1')        // `code`
+    .replace(/^#{1,6}\s+/gm, '')         // # Überschrift
+    .replace(/^\s*[-*+]\s+/gm, '• ')     // Listenpunkte
+    .trim()
+}
+
 export function timeAgo(date: string | null | undefined): string {
   if (!date) return '–'
   const d = new Date(date)

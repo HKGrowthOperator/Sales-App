@@ -9,10 +9,13 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { createClient } from '@/lib/supabase/client'
 import { runCallNoteAutomations } from '@/lib/automations'
+import { decisionMakerSummary } from '@/lib/leads/decisionMakers'
+import { deriveWarnings, SEVERITY_STYLE } from '@/lib/leads/warnings'
+import { stripMarkdown } from '@/lib/utils'
 import { toast } from '@/lib/hooks/use-toast'
 import {
-  Phone, PhoneOutgoing, Building2, User, Globe, ChevronLeft, ChevronRight,
-  Loader2, CheckCircle2, Sparkles, ExternalLink, SkipForward,
+  Phone, PhoneOutgoing, Building2, User, Users, Globe, ChevronLeft, ChevronRight,
+  Loader2, CheckCircle2, Sparkles, ExternalLink, SkipForward, AlertTriangle, ShieldAlert,
 } from 'lucide-react'
 
 // ============================================================
@@ -132,6 +135,8 @@ export function DialerClient({ profile, initialQueue }: Props) {
   }
 
   const phoneHref = lead.phone ? `tel:${lead.phone.replace(/[^\d+]/g, '')}` : undefined
+  const warnings = deriveWarnings(lead)
+  const dm = decisionMakerSummary(lead.management)
 
   return (
     <div className="max-w-2xl mx-auto space-y-4">
@@ -156,8 +161,14 @@ export function DialerClient({ profile, initialQueue }: Props) {
                 <span className="truncate">{lead.company_name}</span>
               </CardTitle>
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-sm text-slate-500">
-                {(lead.contact_name || lead.management) && (
-                  <span className="flex items-center gap-1"><User className="h-3.5 w-3.5" />{lead.contact_name || lead.management}</span>
+                {lead.contact_name ? (
+                  <span className="flex items-center gap-1"><User className="h-3.5 w-3.5" />{lead.contact_name}</span>
+                ) : dm.people.length > 0 ? (
+                  <span className={`flex items-center gap-1 ${dm.multiple ? 'text-amber-600' : ''}`}>
+                    <Users className="h-3.5 w-3.5" />{dm.multiple ? `${dm.people[0].fullName} +${dm.people.length - 1}` : dm.people[0].fullName}
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1 text-slate-400 italic"><User className="h-3.5 w-3.5" />Ansprechpartner noch nicht ermittelt</span>
                 )}
                 {lead.industry && <span className="text-xs text-slate-400">{lead.industry}</span>}
                 {lead.cross_sell_score != null && (
@@ -171,6 +182,27 @@ export function DialerClient({ profile, initialQueue }: Props) {
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
+          {/* Warnungen vor dem Anruf (kritisch/gesperrt zuerst) */}
+          {warnings.filter(w => w.severity === 'gesperrt' || w.severity === 'kritisch' || w.severity === 'pruefen').length > 0 && (
+            <div className="space-y-1.5">
+              {warnings
+                .filter(w => w.severity === 'gesperrt' || w.severity === 'kritisch' || w.severity === 'pruefen')
+                .map((w, i) => (
+                  <div key={i} className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-sm ${SEVERITY_STYLE[w.severity]}`}>
+                    {w.severity === 'gesperrt' ? <ShieldAlert className="h-4 w-4 mt-0.5 shrink-0" /> : <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />}
+                    <span className="font-medium">{w.label}</span>
+                    {w.detail && <span className="opacity-80">— {stripMarkdown(w.detail)}</span>}
+                  </div>
+                ))}
+            </div>
+          )}
+          {dm.multiple && (
+            <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-sm">
+              <span className="font-medium text-amber-700">Mehrere mögliche Entscheider:</span>{' '}
+              <span className="text-slate-700">{dm.people.map(p => p.fullName).join(' · ')}</span>
+            </div>
+          )}
+
           {/* Anruf-Button */}
           <a href={phoneHref} onClick={() => setCalled(true)}>
             <Button size="xl" className={`w-full ${called ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'}`}>
@@ -183,26 +215,26 @@ export function DialerClient({ profile, initialQueue }: Props) {
           {lead.opener_pitch && (
             <div className="rounded-lg bg-violet-50 border border-violet-200 p-3">
               <p className="text-[11px] font-bold uppercase tracking-wider text-violet-700 mb-0.5 flex items-center gap-1"><Sparkles className="h-3 w-3" /> Opener-Pitch</p>
-              <p className="text-sm text-slate-700">{lead.opener_pitch}</p>
+              <p className="text-sm text-slate-700">{stripMarkdown(lead.opener_pitch)}</p>
             </div>
           )}
           {lead.hiring_signal && (
             <div className="rounded-lg bg-amber-50 border border-amber-200 p-3">
               <p className="text-[11px] font-bold uppercase tracking-wider text-amber-700 mb-0.5">🔥 Akuter Anlass / Kaufsignal</p>
-              <p className="text-sm text-slate-700">{lead.hiring_signal}</p>
+              <p className="text-sm text-slate-700">{stripMarkdown(lead.hiring_signal)}</p>
             </div>
           )}
           <div className="grid sm:grid-cols-2 gap-2 text-sm">
             {(lead.key_bottlenecks || lead.pain_guess) && (
               <div className="rounded-lg bg-slate-50 border border-slate-200 p-2">
                 <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Engstellen / Pain</p>
-                <p className="text-slate-700">{lead.key_bottlenecks || lead.pain_guess}</p>
+                <p className="text-slate-700">{stripMarkdown(lead.key_bottlenecks || lead.pain_guess)}</p>
               </div>
             )}
             {lead.approach_notes && (
               <div className="rounded-lg bg-slate-50 border border-slate-200 p-2">
                 <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">📌 Ansprache</p>
-                <p className="text-slate-700">{lead.approach_notes}</p>
+                <p className="text-slate-700">{stripMarkdown(lead.approach_notes)}</p>
               </div>
             )}
           </div>
