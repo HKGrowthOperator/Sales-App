@@ -54,6 +54,7 @@ const navItems = [
 
 const adminItems = [
   { href: '/admin/team', label: 'Team & Rollen', icon: Users },
+  { href: '/admin/scripts', label: 'Skripte & Einwände', icon: FileText },
   { href: '/admin/availability', label: 'Verwalten', icon: Settings },
   { href: '/admin/connections', label: 'Verbindungen', icon: Plug },
   { href: '/admin/mail-previews', label: 'Mails', icon: Mail },
