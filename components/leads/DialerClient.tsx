@@ -3,11 +3,12 @@
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Lead, Profile, LeadStatus, CallResult, RoleContext } from '@/lib/types'
+import { Lead, Profile, CallResult, RoleContext } from '@/lib/types'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { createClient } from '@/lib/supabase/client'
+import { runCallNoteAutomations } from '@/lib/automations'
 import { toast } from '@/lib/hooks/use-toast'
 import {
   Phone, PhoneOutgoing, Building2, User, Globe, ChevronLeft, ChevronRight,
@@ -31,15 +32,15 @@ interface Props {
 const roleContextFor = (role: string): RoleContext =>
   role === 'setter' ? 'Setter' : role === 'closer' ? 'Closer' : 'Opener'
 
-// Ergebnis → Folge-Status + KPI-Label
-const OUTCOMES: { result: CallResult; label: string; status: LeadStatus; cls: string; dnc?: boolean }[] = [
-  { result: 'Nicht erreicht', label: 'Nicht erreicht', status: 'Nicht erreicht', cls: 'border-orange-300 bg-orange-50 text-orange-700 hover:bg-orange-100' },
-  { result: 'Interessiert', label: 'Interessiert', status: 'Interessiert', cls: 'border-green-300 bg-green-50 text-green-700 hover:bg-green-100' },
-  { result: 'Termin vereinbart', label: 'Termin vereinbart', status: 'Setter-Call geplant', cls: 'border-blue-300 bg-blue-500 text-white hover:bg-blue-600' },
-  { result: 'Rückruf vereinbart', label: 'Rückruf', status: 'Später erneut kontaktieren', cls: 'border-yellow-300 bg-yellow-50 text-yellow-700 hover:bg-yellow-100' },
-  { result: 'Kein Interesse', label: 'Kein Interesse', status: 'Nicht passend', cls: 'border-red-300 bg-red-50 text-red-700 hover:bg-red-100' },
-  { result: 'Später erneut kontaktieren', label: 'Später erneut', status: 'Später erneut kontaktieren', cls: 'border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100' },
-  { result: 'Nicht mehr kontaktieren', label: '⛔ Nicht mehr', status: 'Nicht mehr kontaktieren', cls: 'border-zinc-400 bg-zinc-200 text-zinc-800 hover:bg-zinc-300', dnc: true },
+// Ergebnis-Buttons (Folge-Status setzt die Automations-Kaskade kanonisch).
+const OUTCOMES: { result: CallResult; label: string; cls: string }[] = [
+  { result: 'Nicht erreicht', label: 'Nicht erreicht', cls: 'border-orange-300 bg-orange-50 text-orange-700 hover:bg-orange-100' },
+  { result: 'Interessiert', label: 'Interessiert', cls: 'border-green-300 bg-green-50 text-green-700 hover:bg-green-100' },
+  { result: 'Termin vereinbart', label: 'Termin vereinbart', cls: 'border-blue-300 bg-blue-500 text-white hover:bg-blue-600' },
+  { result: 'Rückruf vereinbart', label: 'Rückruf', cls: 'border-yellow-300 bg-yellow-50 text-yellow-700 hover:bg-yellow-100' },
+  { result: 'Kein Interesse', label: 'Kein Interesse', cls: 'border-red-300 bg-red-50 text-red-700 hover:bg-red-100' },
+  { result: 'Später erneut kontaktieren', label: 'Später erneut', cls: 'border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100' },
+  { result: 'Nicht mehr kontaktieren', label: '⛔ Nicht mehr', cls: 'border-zinc-400 bg-zinc-200 text-zinc-800 hover:bg-zinc-300' },
 ]
 
 export function DialerClient({ profile, initialQueue }: Props) {
@@ -74,30 +75,23 @@ export function DialerClient({ profile, initialQueue }: Props) {
     setSaving(true)
     const supabase = createClient()
     try {
-      // 1. Call-Note
-      await supabase.from('call_notes').insert({
+      // 1. Call-Note schreiben
+      const { error: noteErr } = await supabase.from('call_notes').insert({
         lead_id: lead.id,
         user_id: profile.id,
         role_context: roleContext,
         call_result: o.result,
         raw_note: note.trim() || null,
       })
-      // 2. KPI-Event
-      await supabase.from('kpi_events').insert({
-        lead_id: lead.id,
-        actor_user_id: profile.id,
-        role_type: profile.role,
-        event_type: 'call',
-        metadata_json: { result: o.result, source: 'dialer' },
+      if (noteErr) throw noteErr
+
+      // 2. Automations-Kaskade: Status, Follow-up/Wiedervorlage, KPI-Events,
+      //    Audit-Log und Mail-Drafts — dieselbe Logik wie im Notiz-Formular.
+      await runCallNoteAutomations({
+        supabase, lead, profile, role: roleContext, result: o.result,
+        rawNote: note.trim(),
+        customerEmail: lead.email || null,
       })
-      // 3. Lead-Status
-      const upd: Record<string, unknown> = {
-        status: o.status,
-        last_contact_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }
-      if (o.dnc) { upd.do_not_contact = true; upd.opt_out_at = new Date().toISOString() }
-      await supabase.from('leads').update(upd).eq('id', lead.id)
 
       setDone(d => d + 1)
       next()
