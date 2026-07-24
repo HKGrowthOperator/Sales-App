@@ -121,6 +121,11 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   const reminders = remRes.data || []
   const automationLogs = logRes.data || []
 
+  // Persistierte Entscheider (aus decision_makers)
+  const { data: decisionMakers } = await supabase
+    .from('decision_makers').select('*').eq('lead_id', id)
+    .order('is_primary', { ascending: false }).order('created_at', { ascending: true })
+
   const nextAction = deriveLeadNextAction({ lead, appointments, followups })
   const timeline = buildLeadTimeline({
     lead, callNotes: lead.call_notes || [], appointments, followups,
@@ -141,6 +146,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
         followups={followups}
         mails={mails}
         automationLogs={automationLogs}
+        decisionMakers={decisionMakers || []}
       />
     </Suspense>
   )

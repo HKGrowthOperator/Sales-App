@@ -28,7 +28,8 @@ type TargetField =
   | 'website' | 'social_url' | 'linkedin' | 'industry' | 'city' | 'address'
   | 'pain_summary' | 'cluster' | 'employee_count' | 'management' | 'owner_led'
   | 'package_potential' | 'cross_sell_score' | 'key_bottlenecks'
-  | 'hiring_signal' | 'approach_notes' | 'ignore'
+  | 'hiring_signal' | 'buy_signal' | 'entry_point' | 'verification_status'
+  | 'open_positions_raw' | 'approach_notes' | 'ignore'
 
 const FIELD_LABELS: Record<TargetField, string> = {
   company_name: 'Unternehmen *',
@@ -47,9 +48,13 @@ const FIELD_LABELS: Record<TargetField, string> = {
   management: 'Geschäftsführung',
   owner_led: 'Inhabergeführt',
   package_potential: 'Paket-Potenzial',
-  cross_sell_score: 'Cross-Sell-Score',
+  cross_sell_score: 'Cross-Sell-Score / Score',
   key_bottlenecks: 'Engstellen',
   hiring_signal: 'Akuter Anlass / Hiring',
+  buy_signal: 'Kaufsignal',
+  entry_point: 'Einstiegspunkt',
+  verification_status: 'Status Verifizierung',
+  open_positions_raw: 'Offene Stellen',
   approach_notes: 'Hinweise für Ansprache',
   pain_summary: 'Pain / Notiz',
   ignore: '— ignorieren —',
@@ -73,7 +78,11 @@ const HEADER_SYNONYMS: [TargetField, string[]][] = [
   ['package_potential', ['paket-potenzial', 'paket', 'potenzial', 'package']],
   ['cross_sell_score', ['cross-sell-score', 'cross-sell-score (0–6)', 'cross sell', 'cross-sell', 'score']],
   ['key_bottlenecks', ['klare engstellen', 'engstellen', 'engstelle', 'bottleneck', 'schwachstellen']],
-  ['hiring_signal', ['akuter anlass', 'akuter anlass (aktuelles hiring o.ä.)', 'anlass', 'hiring', 'kaufsignal']],
+  ['open_positions_raw', ['offene stellen', 'offene stellen (stand 07/2026)', 'stellen', 'jobs', 'vakanzen']],
+  ['buy_signal', ['kaufsignal', 'buy signal', 'signal']],
+  ['entry_point', ['einstiegspunkt', 'einstieg', 'entry point']],
+  ['verification_status', ['status verifizierung', 'verifizierung', 'verifiziert', 'status verifiziert']],
+  ['hiring_signal', ['akuter anlass', 'akuter anlass (aktuelles hiring o.ä.)', 'anlass', 'hiring']],
   ['approach_notes', ['hinweise für ansprache', 'hinweise', 'ansprache', 'approach', 'note für ansprache']],
   ['city', ['stadt', 'ort', 'city', 'standort']],
   ['address', ['adresse', 'address', 'anschrift', 'straße', 'strasse', 'street']],

@@ -64,6 +64,10 @@ export interface IngestLead {
   recommended_entry?: string | null
   hiring_signal?: string | null
   approach_notes?: string | null
+  buy_signal?: string | null
+  entry_point?: string | null
+  verification_status?: string | null
+  open_positions_raw?: string | null
 }
 
 export interface MapResult {
@@ -172,6 +176,10 @@ export function mapIngestToRadarTarget(lead: IngestLead | null | undefined): Map
     recommended_entry: str(lead.recommended_entry),
     hiring_signal: str(lead.hiring_signal),
     approach_notes: str(lead.approach_notes),
+    buy_signal: str(lead.buy_signal),
+    entry_point: str(lead.entry_point),
+    verification_status: str(lead.verification_status),
+    open_positions_raw: str(lead.open_positions_raw),
   }
   // nur gesetzte Felder behalten
   for (const k of Object.keys(rich)) if (rich[k] == null) delete rich[k]
