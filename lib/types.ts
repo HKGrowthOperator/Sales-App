@@ -75,6 +75,12 @@ export interface Profile {
   full_name: string | null
   role: UserRole
   avatar_url: string | null
+  is_active?: boolean | null
+  color?: string | null
+  timezone?: string | null
+  google_calendar_id?: string | null
+  google_oauth_connected?: boolean | null
+  default_call_link?: string | null
   created_at: string
   updated_at: string
 }
