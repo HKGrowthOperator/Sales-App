@@ -151,6 +151,26 @@ export async function runCallNoteAutomations(input: CallNoteAutomationInput): Pr
   if (result === 'Nicht passend' || result === 'Kein echter Pain') kpis.push({ lead_id: lead.id, actor_user_id: profile.id, role_type: role.toLowerCase(), event_type: 'no_fit', metadata_json: {} })
   try { await supabase.from('kpi_events').insert(kpis) } catch {}
 
+  // ── 4b. Interessiert → Info-/Nurture-Mail als Draft (kein Blindversand) ────
+  //   Öffnet sofort einen review-fertigen Mail-Entwurf im Mail-Preview-Postfach,
+  //   sobald ein Opener/Setter "Interessiert" protokolliert. Ohne E-Mail wird der
+  //   Draft als blocked_missing_email markiert. Versand erst nach Freigabe (Runner).
+  if (result === 'Interessiert') {
+    const to = lead.email || null
+    const firstName = (lead.contact_name || '').split(' ')[0]
+    const angle = lead.entry_angle ? ` rund um ${lead.entry_angle}` : ''
+    const body = `Hallo ${firstName || ''},\n\nvielen Dank für das kurze Gespräch — schön, dass HK Growth${angle} für Sie interessant ist.\n\nWie besprochen schicke ich Ihnen vorab ein paar Eindrücke, damit Sie ein Gefühl für unsere Arbeit bekommen. Für die nächsten Schritte schlage ich ein kurzes, unverbindliches Gespräch vor, in dem wir konkret auf Ihre Situation schauen.\n\nPasst es Ihnen diese oder nächste Woche? Dann halte ich einen Termin für Sie frei.\n\nBeste Grüße\n${profile.full_name || 'HK Growth'}`
+    try {
+      await supabase.from('email_jobs').insert({
+        lead_id: lead.id, type: 'nurture', to_email: to,
+        subject: 'HK Growth – Ihre nächsten Schritte',
+        body,
+        status: to ? 'draft' : 'blocked_missing_email',
+        created_from_event: 'LEAD_INTERESTED', created_by: profile.id,
+      })
+    } catch {}
+  }
+
   // ── 5. Gewonnen → Onboarding-Mail-Preview (kein Blindversand) ──────────────
   if (result === 'Gewonnen') {
     const to = lead.email || null
