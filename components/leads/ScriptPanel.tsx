@@ -54,15 +54,27 @@ export function ScriptPanel({ script, lead, profile, objections = [] }: Props) {
       .replaceAll('[Kontaktname]', lead.contact_name || 'Ansprechpartner')
       .replaceAll('[E-Mail]', lead.email || '[E-Mail]')
       .replaceAll('[UNTERNEHMEN]', lead.company_name)
+      .replaceAll('[FIRMA]', lead.company_name)
       .replaceAll('[BRANCHE]', lead.industry || 'Ihrer Branche')
-      .replaceAll('[PAIN]', lead.pain_guess || 'Ihrem größten Engpass')
+      .replaceAll('[PAIN]', (lead as any).key_bottlenecks || lead.pain_guess || 'Ihrem größten Engpass')
+      .replaceAll('[ENTSCHEIDER]', lead.contact_name || 'dem Entscheider')
+      .replaceAll('[ANLASS]', (lead as any).hiring_signal || (lead as any).buy_signal || 'Ihrer aktuellen Situation')
+      .replaceAll('[KAUFSIGNAL]', (lead as any).buy_signal || (lead as any).hiring_signal || 'Ihrer aktuellen Situation')
+      .replaceAll('[STELLE]', (lead as any).open_positions_raw || 'Ihren offenen Stellen')
+      .replaceAll('[WEBSITE]', lead.website || 'Ihrer Website')
       .replaceAll('[STADT]', (() => {
-        // Versuche Stadt aus last_note zu lesen (Format: "Stadt | Adresse | ...")
+        // 1) aus strukturierter Adresse (… PLZ Ort)
+        const addr = (lead as any).address as string | undefined
+        if (addr) {
+          const m = addr.match(/\d{5}\s+([^,]+)$/)
+          if (m) return m[1].trim()
+          const parts = addr.split(',').map((s: string) => s.trim()).filter(Boolean)
+          if (parts.length) return parts[parts.length - 1].replace(/^\d{5}\s*/, '').trim()
+        }
+        // 2) Fallback: aus last_note ("Stadt | …")
         const fromNote = (lead as any).last_note?.split('|')[0]?.trim()
-        // Fallback: aus Adresse in pain_guess oder industry ableiten
         if (fromNote && fromNote.length < 30) return fromNote
-        // Fallback: leer lassen statt kaputten Platzhalter zeigen
-        return ''
+        return '' // neutral statt kaputtem Platzhalter
       })())
   }
 
