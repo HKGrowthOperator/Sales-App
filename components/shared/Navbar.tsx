@@ -12,6 +12,8 @@ import {
   CalendarClock,
   FileText,
   PhoneCall,
+  PhoneOutgoing,
+  BarChart3,
   Settings,
   Mail,
   Bell,
@@ -41,9 +43,11 @@ const ROLE_COLORS: Record<string, string> = {
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/dial', label: 'Dialer', icon: PhoneOutgoing },
   { href: '/session', label: 'Session', icon: PhoneCall },
   { href: '/leads', label: 'Leads', icon: Users },
   { href: '/appointments', label: 'Termine', icon: Calendar },
+  { href: '/kpi', label: 'KPIs', icon: BarChart3 },
   { href: '/availability', label: 'Verfügbarkeit', icon: CalendarClock },
   { href: '/scripts', label: 'Skripte', icon: FileText },
 ]

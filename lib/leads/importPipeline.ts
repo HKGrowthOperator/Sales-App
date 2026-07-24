@@ -63,6 +63,7 @@ function leadFromRow(
   targetId: string,
   key: string,
   opts: ImportOptions,
+  rich?: Record<string, unknown>,
 ) {
   const areas = (row.product_areas as string[]) || []
   const area = areas[0]
@@ -96,6 +97,7 @@ function leadFromRow(
     radar_target_id: targetId,
     dedup_key: key,
     ...(opts.assignedTo ? { assigned_to: opts.assignedTo } : {}),
+    ...(rich || {}),
   }
   return { lead, missing }
 }
@@ -112,7 +114,7 @@ export async function runLeadImportPipeline(
 
   // 1. Mappen
   const results: LeadResult[] = []
-  const mapped: { key: string; row: Record<string, unknown>; idx: number; excluded?: string }[] = []
+  const mapped: { key: string; row: Record<string, unknown>; idx: number; excluded?: string; rich?: Record<string, unknown> }[] = []
   leads.forEach((lead, idx) => {
     const m = mapIngestToRadarTarget(lead)
     if (!m.ok || !m.row || !m.dedup_key) {
@@ -135,7 +137,7 @@ export async function runLeadImportPipeline(
         }
         return
       }
-      mapped.push({ key: m.dedup_key, row: m.row, idx })
+      mapped.push({ key: m.dedup_key, row: m.row, idx, rich: m.rich })
     }
   })
 
@@ -300,7 +302,7 @@ export async function runLeadImportPipeline(
     // b) AUTO-PROMOTE → Lead direkt in den Opener-Pool (status 'Zu kontaktieren').
     //    Kommt IMMER an; fehlt Pflicht-Info, wird der Lead als enrichment-bedürftig
     //    markiert (next_step), aber nicht blockiert.
-    const { lead, missing } = leadFromRow(row, targetId as string, key, opts)
+    const { lead, missing } = leadFromRow(row, targetId as string, key, opts, m.rich)
     const { data: leadRow, error: leadErr } = await svc.from('leads').insert(lead).select('id').single()
     if (leadErr) {
       results[idx].lead = 'lead_failed'
