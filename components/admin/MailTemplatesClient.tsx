@@ -35,6 +35,7 @@ const KNOWN_KEYS: { key: string; label: string; when: string }[] = [
   { key: 'HK-SALES-CLOSER-BOOKED', label: 'Terminbestätigung Closer-Call', when: 'Sofort nach der Buchung durch den Setter.' },
   { key: 'HK-SALES-CLOSER-24H', label: 'Reminder 1 Tag vorher (Closer)', when: '24h vor dem Closer-Termin.' },
   { key: 'HK-SALES-CLOSER-1H', label: 'Reminder 1 Stunde vorher (Closer)', when: '1h vor dem Closer-Termin.' },
+  { key: 'HK-SALES-NO-SHOW', label: 'No-Show (Termin verpasst)', when: 'Wenn ein Termin als No-Show markiert wird. FOMO-Ansprache — verpasste Chance, keine zweite Einladung.' },
   { key: 'HK-SALES-ONBOARDING', label: 'Onboarding (nach Abschluss)', when: 'Wenn ein Lead auf „Gewonnen" gesetzt wird.' },
 ]
 
