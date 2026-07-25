@@ -172,6 +172,9 @@ export function LeadUploadClient({ profile, allProfiles }: Props) {
   const [progress, setProgress] = useState({ done: 0, total: 0 })
   const [summary, setSummary] = useState<ImportSummary | null>(null)
   const [results, setResults] = useState<ImportResult[]>([])
+  // Fehler bleibt sichtbar stehen — eine Toast-Meldung ist weg, bevor man
+  // sie lesen konnte, und dann steht man ohne Anhaltspunkt da.
+  const [importError, setImportError] = useState<string | null>(null)
 
   function loadTable(text: string, label: string) {
     const parsed = parseTable(text)
@@ -284,6 +287,7 @@ export function LeadUploadClient({ profile, allProfiles }: Props) {
     setImporting(true)
     setSummary(null)
     setResults([])
+    setImportError(null)
     setProgress({ done: 0, total: importable.length })
 
     const agg: ImportSummary = {}
@@ -300,9 +304,11 @@ export function LeadUploadClient({ profile, allProfiles }: Props) {
             assigned_to: assignTo || null,
           }),
         })
-        const data = await res.json()
+        const data = await res.json().catch(() => ({}))
         if (!res.ok || !data.ok) {
-          toast({ title: 'Import-Fehler', description: data.detail || data.error || `HTTP ${res.status}`, variant: 'destructive' })
+          const msg = data.detail || data.error || `HTTP ${res.status} ${res.statusText}`
+          setImportError(`Zeilen ${i + 1}–${Math.min(i + CHUNK_SIZE, importable.length)}: ${msg}`)
+          toast({ title: 'Import-Fehler', description: msg, variant: 'destructive' })
           break
         }
         for (const [k, v] of Object.entries(data.summary as ImportSummary)) {
@@ -313,6 +319,9 @@ export function LeadUploadClient({ profile, allProfiles }: Props) {
         setSummary({ ...agg })
         setResults([...allResults])
       }
+    } catch (e: any) {
+      setImportError(e?.message || String(e))
+      toast({ title: 'Import abgebrochen', description: e?.message || String(e), variant: 'destructive' })
     } finally {
       setImporting(false)
     }
@@ -554,6 +563,21 @@ export function LeadUploadClient({ profile, allProfiles }: Props) {
               </div>
             </CardContent>
           </Card>
+
+          {/* Fehler bleibt stehen, bis der nächste Versuch startet */}
+          {importError && (
+            <Card className="border-red-200 bg-red-50">
+              <CardContent className="p-4 space-y-1">
+                <div className="flex items-center gap-2 text-sm font-medium text-red-800">
+                  <XCircle className="h-4 w-4" /> Import fehlgeschlagen
+                </div>
+                <p className="text-xs text-red-700 break-words">{importError}</p>
+                <p className="text-[11px] text-red-500">
+                  Diesen Text bitte vollständig weitergeben — daran lässt sich die Ursache erkennen.
+                </p>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Import */}
           {importing ? (
