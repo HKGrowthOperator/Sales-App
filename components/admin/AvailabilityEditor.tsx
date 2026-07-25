@@ -11,7 +11,11 @@ import { toast } from '@/lib/hooks/use-toast'
 import { Loader2, Save, Trash2, Plus, CalendarClock, Link2, CheckCircle2 } from 'lucide-react'
 
 type SchedRole = 'setter' | 'closer'
-interface Prof { id: string; full_name: string | null; email: string; role: string; is_active: boolean; default_call_link: string | null; google_calendar_id: string | null; google_oauth_connected: boolean }
+interface Prof {
+  id: string; full_name: string | null; email: string; role: string; is_active: boolean
+  default_call_link: string | null; google_calendar_id: string | null; google_oauth_connected: boolean
+  google_overridable_blocks: string[] | null
+}
 interface Rule { id: string; user_id: string; role_type: SchedRole; weekday: number; start_time: string; end_time: string; slot_duration_minutes: number; buffer_before_minutes: number; buffer_after_minutes: number; is_active: boolean }
 interface Exc { id: string; user_id: string; date: string; start_time: string | null; end_time: string | null; type: string; reason: string | null }
 
@@ -78,6 +82,8 @@ function UserCard({ prof, rules, exceptions }: { prof: Prof; rules: Rule[]; exce
           {savingProfile ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} Profil speichern
         </Button>
 
+        <GoogleBlock prof={prof} />
+
         {/* Rollen-Verfügbarkeit */}
         <div className="grid md:grid-cols-2 gap-3 pt-2 border-t border-slate-100">
           <RoleBlock userId={prof.id} roleType="setter" rules={rules.filter(r => r.role_type === 'setter')} />
@@ -88,6 +94,77 @@ function UserCard({ prof, rules, exceptions }: { prof: Prof; rules: Rule[]; exce
         <ExceptionsBlock userId={prof.id} exceptions={exceptions} />
       </CardContent>
     </Card>
+  )
+}
+
+// ============================================================
+// Google-Kalender pro Person.
+// ------------------------------------------------------------
+// Die Ausnahmeliste ist der entscheidende Teil: Wer seinen Tag in
+// Blöcken plant (Deep Work, Fokus, Pause …), hat in Google durchgehend
+// „beschäftigt" stehen. Ohne Ausnahmen fände die App keinen einzigen
+// freien Slot. Alles, was hier steht, darf überbucht werden.
+// ============================================================
+function GoogleBlock({ prof }: { prof: Prof }) {
+  const router = useRouter()
+  const [blocks, setBlocks] = useState((prof.google_overridable_blocks || ['Deep Work']).join(', '))
+  const [busy, setBusy] = useState(false)
+
+  async function call(body: any, okMsg: string) {
+    setBusy(true)
+    try {
+      const res = await fetch('/api/integrations/google-calendar/settings', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: prof.id, ...body }),
+      })
+      const out = await res.json().catch(() => ({}))
+      if (!res.ok || !out.ok) throw new Error(out.error || 'Fehlgeschlagen')
+      toast({ title: okMsg })
+      router.refresh()
+    } catch (e: any) {
+      toast({ title: 'Fehler', description: e?.message || String(e), variant: 'destructive' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-slate-200 p-3 space-y-2">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <span className="text-xs font-medium text-slate-700 flex items-center gap-1.5">
+          <CalendarClock className="h-3.5 w-3.5" /> Google-Kalender
+          {prof.google_oauth_connected
+            ? <span className="text-green-600 inline-flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> verbunden</span>
+            : <span className="text-slate-400">nicht verbunden</span>}
+        </span>
+        {prof.google_oauth_connected ? (
+          <Button size="sm" variant="outline" className="h-7 text-xs text-red-600 border-red-200" disabled={busy}
+            onClick={() => call({ action: 'disconnect' }, 'Verbindung getrennt')}>
+            Trennen
+          </Button>
+        ) : (
+          <a href="/api/integrations/google-calendar/connect">
+            <Button size="sm" variant="outline" className="h-7 text-xs">Kalender verbinden</Button>
+          </a>
+        )}
+      </div>
+
+      {prof.google_oauth_connected && (
+        <div className="space-y-1">
+          <Label className="text-xs">Blöcke, über die Termine gelegt werden dürfen</Label>
+          <Input value={blocks} onChange={e => setBlocks(e.target.value)}
+            placeholder="Deep Work, Fokus" className="h-8 text-sm" />
+          <p className="text-[11px] text-slate-400">
+            Mit Komma trennen. Der Titel muss den Begriff nur enthalten — „Deep Work" trifft auch „🎯 Deep Work 3".
+            Alles andere im Kalender gilt als belegt.
+          </p>
+          <Button size="sm" variant="outline" className="h-7 text-xs gap-1" disabled={busy}
+            onClick={() => call({ action: 'blocks', blocks: blocks.split(',') }, 'Ausnahmen gespeichert')}>
+            <Save className="h-3 w-3" /> Ausnahmen speichern
+          </Button>
+        </div>
+      )}
+    </div>
   )
 }
 

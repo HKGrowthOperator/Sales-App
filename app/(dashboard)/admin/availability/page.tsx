@@ -13,7 +13,7 @@ export default async function AdminAvailabilityPage() {
 
   const { data: profiles } = await supabase
     .from('profiles')
-    .select('id, full_name, email, role, is_active, default_call_link, google_calendar_id, google_oauth_connected')
+    .select('id, full_name, email, role, is_active, default_call_link, google_calendar_id, google_oauth_connected, google_overridable_blocks')
     .order('role', { ascending: true })
 
   const { data: rules } = await supabase.from('availability_rules').select('*')

@@ -23,5 +23,8 @@ export async function getFlags(supabase: any): Promise<AppFlags> {
 }
 
 export function googleConfigured(): boolean {
-  return !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.GOOGLE_REFRESH_TOKEN)
+  // Ein gemeinsamer GOOGLE_REFRESH_TOKEN ist nicht mehr nötig: jede Person
+  // verbindet ihren eigenen Kalender unter Admin → Verfügbarkeit. Für die
+  // Grundkonfiguration zählen nur noch Client-ID und -Secret.
+  return !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET)
 }

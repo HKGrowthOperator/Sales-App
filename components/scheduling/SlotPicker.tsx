@@ -1,8 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { createClient } from '@/lib/supabase/client'
-import { getAvailableSlots, groupSlotsByDay, slotTimeLabel, Slot, DaySlots, SchedRole } from '@/lib/scheduling/slots'
+import { groupSlotsByDay, slotTimeLabel, Slot, DaySlots, SchedRole } from '@/lib/scheduling/slots'
 import { Button } from '@/components/ui/button'
 import { Loader2, RefreshCw, CalendarClock, Star, Check, CalendarX, ShieldCheck, Clock } from 'lucide-react'
 
@@ -30,10 +29,18 @@ export function SlotPicker({ roleType, selected, onSelect, days = 7 }: Props) {
   const load = useCallback(async () => {
     setLoading(true); setError(null)
     try {
-      const supabase = createClient()
+      // Über die API, nicht direkt: nur serverseitig lässt sich der
+      // Google-Kalender abfragen. Sonst würden hier Zeiten erscheinen,
+      // die beim Buchen wieder abgelehnt werden.
       const from = new Date()
       const to = new Date(from.getTime() + days * 86400e3)
-      const slots = await getAvailableSlots({ supabase, roleType, from, to })
+      const res = await fetch(
+        `/api/scheduling/slots?role=${roleType}&from=${from.toISOString()}&to=${to.toISOString()}`,
+        { cache: 'no-store' },
+      )
+      const out = await res.json().catch(() => ({}))
+      if (!res.ok || !out.ok) throw new Error(out.error || 'Slots konnten nicht geladen werden')
+      const slots: Slot[] = out.slots || []
       setGoogleChecked(slots.some(s => s.source === 'google_checked'))
       setGroups(groupSlotsByDay(slots))
     } catch (e: any) {

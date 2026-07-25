@@ -2,30 +2,10 @@ import { google } from 'googleapis'
 import { createClient } from '@supabase/supabase-js'
 import { logIntegration, updateLog } from './log'
 import { CalendarEventInput, CalendarEventResult } from './types'
+import { calendarClientForUser } from './googleAuth'
 
-// ============================================================
-// Auth — OAuth2 mit gespeichertem Refresh Token
-// Für Setup-Anleitung: GOOGLE_CALENDAR_SETUP.md
-// ============================================================
-function getCalendarClient() {
-  const clientId     = process.env.GOOGLE_CLIENT_ID
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET
-  const refreshToken = process.env.GOOGLE_REFRESH_TOKEN
-
-  if (!clientId || !clientSecret || !refreshToken) {
-    throw new Error(
-      'Google Calendar nicht konfiguriert. ' +
-      'GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET und GOOGLE_REFRESH_TOKEN müssen in .env.local gesetzt sein. ' +
-      'Siehe GOOGLE_CALENDAR_SETUP.md.'
-    )
-  }
-
-  const auth = new google.auth.OAuth2(clientId, clientSecret)
-  auth.setCredentials({ refresh_token: refreshToken })
-
-  return google.calendar({ version: 'v3', auth })
-}
-
+// Auth läuft über googleAuth.ts — pro Person ein eigener Kalender,
+// mit dem gemeinsamen GOOGLE_REFRESH_TOKEN als Rückfallebene.
 function getServiceClient() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -103,7 +83,9 @@ function buildEventDescription(input: CalendarEventInput): string {
 // ============================================================
 export async function createCalendarEvent(
   input: CalendarEventInput,
-  context: { lead_id?: string; user_id?: string }
+  // assigned_user_id = die Person, in deren Kalender der Termin gehört.
+  // Ohne sie landet alles im gemeinsamen Fallback-Kalender.
+  context: { lead_id?: string; user_id?: string; assigned_user_id?: string | null }
 ): Promise<CalendarEventResult> {
   const logId = await logIntegration({
     event_type:     'calendar.create_event',
@@ -120,8 +102,17 @@ export async function createCalendarEvent(
   })
 
   try {
-    const calendar    = getCalendarClient()
-    const calendarId  = process.env.GOOGLE_CALENDAR_ID || 'primary'
+    // Kalender der zuständigen Person; fällt auf den gemeinsamen Zugang
+    // aus den Umgebungsvariablen zurück, wenn sie nicht verbunden ist.
+    const client = await calendarClientForUser(context.assigned_user_id)
+    if (!client) {
+      throw new Error(
+        'Google Calendar nicht konfiguriert. GOOGLE_CLIENT_ID und GOOGLE_CLIENT_SECRET setzen, ' +
+        'danach verbindet jede Person ihren Kalender unter Admin → Verfügbarkeit.',
+      )
+    }
+    const calendar    = client.calendar
+    const calendarId  = client.calendarId
     const description = buildEventDescription(input)
 
     // Teilnehmer: immer den Kunden, falls E-Mail vorhanden
@@ -211,7 +202,7 @@ export async function createCalendarEvent(
 // ============================================================
 export async function buildCalendarInputFromAppointment(
   appointmentId: string
-): Promise<{ input: CalendarEventInput; leadId: string } | { error: string }> {
+): Promise<{ input: CalendarEventInput; leadId: string; assignedUserId: string | null } | { error: string }> {
   const supabase = getServiceClient()
 
   const { data: appt, error: apptErr } = await supabase
@@ -249,6 +240,7 @@ export async function buildCalendarInputFromAppointment(
 
   return {
     leadId: lead?.id,
+    assignedUserId: appt.assigned_user_id ?? null,
     input: {
       appointment_id:        appt.id,
       appointment_type:      appt.appointment_type,

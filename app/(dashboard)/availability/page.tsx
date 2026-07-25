@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import { getAvailableSlots, groupSlotsByDay, slotTimeLabel } from '@/lib/scheduling/slots'
+import { groupSlotsByDay, slotTimeLabel } from '@/lib/scheduling/slots'
+import { getAvailableSlotsWithGoogle } from '@/lib/scheduling/slotsServer'
 import { CalendarClock, ShieldCheck, Clock } from 'lucide-react'
 
 export default async function AvailabilityPage() {
@@ -13,8 +14,8 @@ export default async function AvailabilityPage() {
   const from = new Date()
   const to = new Date(from.getTime() + 7 * 86400e3)
   const [setterSlots, closerSlots] = await Promise.all([
-    getAvailableSlots({ supabase, roleType: 'setter', from, to }),
-    getAvailableSlots({ supabase, roleType: 'closer', from, to }),
+    getAvailableSlotsWithGoogle({ supabase, roleType: 'setter', from, to }),
+    getAvailableSlotsWithGoogle({ supabase, roleType: 'closer', from, to }),
   ])
   const googleChecked = [...setterSlots, ...closerSlots].some(s => s.source === 'google_checked')
 

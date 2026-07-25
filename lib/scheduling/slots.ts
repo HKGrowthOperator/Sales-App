@@ -1,8 +1,11 @@
 // ============================================================
 // Slot Engine — zentrale Verfügbarkeits-/Slot-Berechnung.
 // Interne Availability (availability_rules − Exceptions − Appointments)
-// optional minus Google Busy Times (später als Provider).
-// Funktioniert mit Server- oder Client-Supabase-Instanz.
+// minus optional übergebene externe Belegtzeiten (Google-Kalender).
+//
+// Diese Datei bleibt bewusst FREI von Google-Abhängigkeiten, weil sie
+// auch im Browser läuft (SlotPicker). Die Google-Abfrage steckt in
+// slotsServer.ts und reicht ihr Ergebnis hier als externalBusy herein.
 // ============================================================
 
 import { BLOCKING_APPOINTMENT_STATUSES } from '@/lib/scheduling/status'
@@ -80,6 +83,8 @@ interface Rule {
 }
 interface Busy { assigned_user_id: string; start: number; end: number }  // epoch ms inkl. Puffer
 
+export interface ExternalBusy { userId: string; start: number; end: number }
+
 export interface GetSlotsArgs {
   supabase: any
   roleType: SchedRole
@@ -87,6 +92,10 @@ export interface GetSlotsArgs {
   to: Date
   durationMinutes?: number
   now?: Date
+  /** Belegtzeiten aus externen Kalendern (epoch ms), z. B. Google. */
+  externalBusy?: ExternalBusy[]
+  /** Wessen externer Kalender tatsächlich abgefragt wurde — nur für die Anzeige. */
+  externalCheckedUserIds?: string[]
 }
 
 export async function getAvailableSlots(args: GetSlotsArgs): Promise<Slot[]> {
@@ -140,6 +149,10 @@ export async function getAvailableSlots(args: GetSlotsArgs): Promise<Slot[]> {
     }
   })
 
+  // 3b. Externe Belegtzeiten (Google) — kommen fertig von slotsServer.ts.
+  const googleBusy = args.externalBusy || []
+  const googleChecked = new Set(args.externalCheckedUserIds || [])
+
   // 4. Slots erzeugen je Tag/Regel
   const slots: Slot[] = []
   const dayCount = Math.ceil((to.getTime() - from.getTime()) / 86400e3) + 1
@@ -185,6 +198,13 @@ export async function getAvailableSlots(args: GetSlotsArgs): Promise<Slot[]> {
           slotStart.getTime() < b.end && slotEnd.getTime() > b.start)
         if (collides) continue
 
+        // Google-Kollision (Einträge außerhalb der freigegebenen Fokusblöcke)
+        const collidesGoogle = googleBusy.some(b =>
+          b.userId === r.user_id &&
+          slotStart.getTime() < b.end && slotEnd.getTime() > b.start)
+        if (collidesGoogle) continue
+
+        const viaGoogle = googleChecked.has(r.user_id)
         slots.push({
           userId: r.user_id,
           userName: r.user?.full_name || 'HK',
@@ -193,8 +213,8 @@ export async function getAvailableSlots(args: GetSlotsArgs): Promise<Slot[]> {
           endAt: slotEnd.toISOString(),
           timezone: r.user?.timezone || TZ,
           durationMinutes: dur,
-          source: 'internal',
-          confidence: 'internal_only',
+          source: viaGoogle ? 'google_checked' : 'internal',
+          confidence: viaGoogle ? 'high' : 'internal_only',
           isRecommended: false,
         })
       }
@@ -213,11 +233,13 @@ export async function getAvailableSlots(args: GetSlotsArgs): Promise<Slot[]> {
 export async function isSlotBookable(args: {
   supabase: any; roleType: SchedRole; assignedUserId: string
   startAt: string; durationMinutes?: number; now?: Date
+  externalBusy?: ExternalBusy[]
 }): Promise<boolean> {
   const start = new Date(args.startAt)
   const slots = await getAvailableSlots({
     supabase: args.supabase, roleType: args.roleType,
     from: start, to: start, durationMinutes: args.durationMinutes, now: args.now,
+    externalBusy: args.externalBusy,
   })
   const target = start.toISOString()
   return slots.some(s => s.userId === args.assignedUserId && s.startAt === target)
