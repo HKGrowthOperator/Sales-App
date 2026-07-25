@@ -11,6 +11,7 @@ import { sendSlack, slackConfigured } from '@/lib/integrations/slack'
 import { BLOCKING_APPOINTMENT_STATUSES, isBlockingAppointmentStatus } from '@/lib/scheduling/status'
 import { buildCalendarInputFromAppointment, createCalendarEvent } from '@/lib/integrations/google-calendar'
 import { selectTemplate } from '@/lib/email/templates'
+import { renderHkEmailHtml } from '@/lib/email/layout'
 
 const fmt = (iso: string) => new Intl.DateTimeFormat('de-DE', { timeZone: 'Europe/Berlin', dateStyle: 'full', timeStyle: 'short' }).format(new Date(iso))
 const fmtDate = (iso: string) => new Intl.DateTimeFormat('de-DE', { timeZone: 'Europe/Berlin', dateStyle: 'full' }).format(new Date(iso))
@@ -105,7 +106,25 @@ export async function runDueJobs(supabase: any, now: Date = new Date()): Promise
           body = fillVars(tpl.body_text, vars)
         }
       } catch { /* Vorlagenfehler darf den Reminder nie brechen */ }
-      const res = await sendEmail({ to, subject, body })
+
+      // Reminder im HK-Design versenden (Header, Termin-Box mit Button, Footer).
+      // Plain-Text bleibt als Fallback für Clients ohne HTML.
+      let html: string | undefined
+      try {
+        html = renderHkEmailHtml({
+          bodyText: body,
+          subject,
+          callType: appt.type === 'closer_call' ? 'closer_call' : 'setter_call',
+          vars: {
+            appointment_date: fmtDate(appt.appointment_at),
+            appointment_time: fmtTime(appt.appointment_at),
+            zoom_link: appt.assigned?.default_call_link || null,
+            expert_name: appt.assigned?.full_name || null,
+          },
+        })
+      } catch { /* ohne HTML wird Plain-Text gesendet */ }
+
+      const res = await sendEmail({ to, subject, body, html })
       if (res.ok) {
         await supabase.from('reminder_jobs').update({ status: 'sent', attempts: (r.attempts || 0) + 1 }).eq('id', r.id).eq('status', 'sending')
         const field = r.type === 'reminder_1h' ? 'reminder_1h_status' : r.type === 'reminder_24h' ? 'reminder_24h_status' : null
@@ -137,7 +156,13 @@ export async function runDueJobs(supabase: any, now: Date = new Date()): Promise
       const { data: claimed } = await supabase.from('email_jobs')
         .update({ status: 'sending' }).eq('id', m.id).in('status', sendableStatuses).select('id').maybeSingle()
       if (!claimed) { continue }
-      const res = await sendEmail({ to: m.to_email, subject: m.subject, body: m.body, html: m.body_html || undefined })
+      // Fehlt vorbereitetes HTML (z. B. Info-Mail, No-Show, Onboarding),
+      // wird der Text hier ins HK-Design gerendert — nie nackter Text.
+      let mailHtml: string | undefined = m.body_html || undefined
+      if (!mailHtml) {
+        try { mailHtml = renderHkEmailHtml({ bodyText: m.body || '', subject: m.subject || '' }) } catch {}
+      }
+      const res = await sendEmail({ to: m.to_email, subject: m.subject, body: m.body, html: mailHtml })
       if (res.ok) { await supabase.from('email_jobs').update({ status: 'sent', sent_at: nowIso }).eq('id', m.id).eq('status', 'sending'); sum.emails.sent++ }
       else { await supabase.from('email_jobs').update({ status: 'failed' }).eq('id', m.id); sum.emails.failed++ }
     } catch (e: any) {
