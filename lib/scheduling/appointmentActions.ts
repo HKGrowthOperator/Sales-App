@@ -6,6 +6,7 @@
 // ============================================================
 import { APPOINTMENT_STATUS, BLOCKING_APPOINTMENT_STATUSES, CALENDAR_SYNC, isTerminalAppointmentStatus } from '@/lib/scheduling/status'
 import { isSlotBookable } from '@/lib/scheduling/slots'
+import { fetchGoogleBusyViaApi } from '@/lib/scheduling/busyClient'
 import { selectTemplate } from '@/lib/email/templates'
 
 type Supabase = any
@@ -71,8 +72,11 @@ export async function rescheduleAppointment(a: RescheduleArgs): Promise<ActionRe
   const durationMinutes = Math.max(15, Math.round((new Date(a.newEndAt).getTime() - new Date(a.newStartAt).getTime()) / 60000))
   const roleType = appt.appointment_type === 'Closer-Call' ? 'closer' : 'setter'
 
-  // Neuer Slot muss serverseitig buchbar sein (Arbeitszeit, kein Urlaub, nicht Vergangenheit)
-  const bookable = await isSlotBookable({ supabase: a.supabase, roleType, assignedUserId, startAt: a.newStartAt, durationMinutes })
+  // Neuer Slot muss buchbar sein (Arbeitszeit, kein Urlaub, nicht Vergangenheit,
+  // und nicht durch einen Google-Termin belegt). Diese Datei läuft auch im
+  // Browser, deshalb kommen die Google-Zeiten über die API statt direkt.
+  const externalBusy = await fetchGoogleBusyViaApi(roleType, new Date(a.newStartAt))
+  const bookable = await isSlotBookable({ supabase: a.supabase, roleType, assignedUserId, startAt: a.newStartAt, durationMinutes, externalBusy })
   if (!bookable) return { ok: false, code: 'slot_taken', message: 'Der neue Termin ist außerhalb der Verfügbarkeit oder nicht mehr buchbar.' }
 
   // Konflikt am neuen Slot (außer diesem Termin)

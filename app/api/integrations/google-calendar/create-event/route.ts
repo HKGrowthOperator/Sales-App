@@ -48,6 +48,7 @@ export async function POST(request: NextRequest) {
   const result = await createCalendarEvent(buildResult.input, {
     lead_id: buildResult.leadId,
     user_id: profile.id,
+    assigned_user_id: buildResult.assignedUserId,
   })
 
   if (!result.success) {

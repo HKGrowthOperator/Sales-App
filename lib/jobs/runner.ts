@@ -180,7 +180,7 @@ export async function runDueJobs(supabase: any, now: Date = new Date()): Promise
       try {
         const built = await buildCalendarInputFromAppointment(a.id)
         if ('error' in built) { sum.calendar.skipped++; continue }
-        const res = await createCalendarEvent(built.input, { lead_id: built.leadId })
+        const res = await createCalendarEvent(built.input, { lead_id: built.leadId, assigned_user_id: built.assignedUserId })
         if (res.success) sum.calendar.synced++; else sum.calendar.failed++
       } catch { sum.calendar.failed++ }
     }

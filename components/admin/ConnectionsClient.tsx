@@ -34,7 +34,7 @@ export function ConnectionsClient({ health, flags: initialFlags }: { health: Hea
       toast({ title: 'Resend nicht konfiguriert', description: 'RESEND_API_KEY + EMAIL_FROM in .env setzen.', variant: 'destructive' }); return
     }
     if (key === 'calendar_sync_enabled' && next && !health.googleConfigured) {
-      toast({ title: 'Google nicht konfiguriert', description: 'GOOGLE_CLIENT_ID/SECRET/REFRESH_TOKEN setzen.', variant: 'destructive' }); return
+      toast({ title: 'Google nicht konfiguriert', description: 'GOOGLE_CLIENT_ID und GOOGLE_CLIENT_SECRET setzen, dann Kalender unter Verfügbarkeit verbinden.', variant: 'destructive' }); return
     }
     setSavingKey(key)
     setFlags(f => ({ ...f, [key]: next }))

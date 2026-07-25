@@ -7,6 +7,7 @@
 
 import { APPOINTMENT_STATUS, BLOCKING_APPOINTMENT_STATUSES, CALENDAR_SYNC } from '@/lib/scheduling/status'
 import { isSlotBookable } from '@/lib/scheduling/slots'
+import { fetchGoogleBusyViaApi } from '@/lib/scheduling/busyClient'
 import {
   productAreaFromEntryAngle, selectTemplate, renderEmailFull, buildTemplateVars,
   resolveMeetingLink, PRODUCT_LABEL, type CallType,
@@ -58,7 +59,10 @@ export async function bookAppointment(args: BookArgs): Promise<BookResult> {
 
   // 2b. Slot serverseitig gegen Verfügbarkeit prüfen (Arbeitszeit, Urlaub, Vergangenheit)
   const roleType = type === 'closer_call' ? 'closer' : 'setter'
-  const bookable = await isSlotBookable({ supabase, roleType, assignedUserId, startAt, durationMinutes })
+  // Diese Funktion wird auch aus dem Browser aufgerufen (CallNoteForm),
+  // deshalb kommen die Google-Belegtzeiten über die API statt direkt.
+  const externalBusy = await fetchGoogleBusyViaApi(roleType, new Date(startAt))
+  const bookable = await isSlotBookable({ supabase, roleType, assignedUserId, startAt, durationMinutes, externalBusy })
   if (!bookable) return { ok: false, code: 'slot_invalid', message: 'Dieser Slot ist nicht (mehr) buchbar (außerhalb Verfügbarkeit oder vergeben).' }
 
   // 3. Slot-Konflikt vorab prüfen
