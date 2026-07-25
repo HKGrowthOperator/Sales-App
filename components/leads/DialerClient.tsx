@@ -15,7 +15,7 @@ import { stripMarkdown } from '@/lib/utils'
 import { toast } from '@/lib/hooks/use-toast'
 import {
   Phone, PhoneOutgoing, Building2, User, Users, Globe, ChevronLeft, ChevronRight,
-  Loader2, CheckCircle2, Sparkles, ExternalLink, SkipForward, AlertTriangle, ShieldAlert,
+  Loader2, CheckCircle2, Sparkles, ExternalLink, SkipForward, AlertTriangle, ShieldAlert, Mail,
 } from 'lucide-react'
 
 // ============================================================
@@ -54,6 +54,34 @@ export function DialerClient({ profile, initialQueue }: Props) {
   const [saving, setSaving] = useState(false)
   const [called, setCalled] = useState(false)
   const [done, setDone] = useState(0)
+  const [infoMailing, setInfoMailing] = useState(false)
+
+  // "Kunde will keinen Termin, sondern Infos per Mail" → Info-Mail vorbereiten.
+  async function sendInfoMail() {
+    if (!lead || infoMailing) return
+    setInfoMailing(true)
+    try {
+      const res = await fetch('/api/leads/info-mail', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lead_id: lead.id }),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.ok) {
+        toast({ title: 'Info-Mail fehlgeschlagen', description: data.detail || data.error, variant: 'destructive' })
+      } else if (data.missingEmail) {
+        toast({ title: 'Keine E-Mail-Adresse', description: 'Mail wurde vorbereitet, aber es fehlt die Adresse.', variant: 'destructive' })
+      } else {
+        toast({
+          title: 'Info-Mail vorbereitet',
+          description: data.usedTemplate ? 'Liegt zur Freigabe in den Mail-Previews.' : '⚠️ Standardtext — Vorlage im Admin hinterlegen.',
+        })
+      }
+    } catch {
+      toast({ title: 'Fehler', description: 'Info-Mail konnte nicht erstellt werden.', variant: 'destructive' })
+    } finally {
+      setInfoMailing(false)
+    }
+  }
 
   const lead = queue[idx]
   const roleContext = roleContextFor(profile.role)
@@ -255,6 +283,16 @@ export function DialerClient({ profile, initialQueue }: Props) {
             placeholder="Kurze Gesprächsnotiz (optional)…"
             rows={2}
           />
+
+          {/* Info-Mail-Pfad: Kunde will keinen Termin, sondern Unterlagen */}
+          <button
+            onClick={sendInfoMail}
+            disabled={infoMailing}
+            className="w-full rounded-lg border border-violet-300 bg-violet-50 px-3 py-2.5 text-sm font-medium text-violet-700 hover:bg-violet-100 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {infoMailing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
+            „Schicken Sie mir Infos" → Info-Mail vorbereiten
+          </button>
 
           {/* Ergebnis-Buttons */}
           <div>

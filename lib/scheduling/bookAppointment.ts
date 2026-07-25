@@ -249,4 +249,20 @@ async function createReminderJobs(supabase: any, p: { leadId: string; appointmen
     lead_id: p.leadId, appointment_id: p.appointmentId,
     type: j.type, channel: 'email', send_at: j.send_at, status: 'pending',
   })))
+
+  // Zwischen-Reminder („Mitte"): mittig zwischen Buchung und Termin — aber nur,
+  // wenn mehr als 48h dazwischen liegen (sonst kollidiert er mit dem 24h-Reminder).
+  // Separat eingefügt, damit ein evtl. noch nicht erlaubter Typ die Pflicht-
+  // Reminder nicht mitreißt.
+  const now = Date.now()
+  const leadTime = start - now
+  if (leadTime > 48 * 3600e3) {
+    try {
+      await supabase.from('reminder_jobs').insert({
+        lead_id: p.leadId, appointment_id: p.appointmentId,
+        type: 'reminder_mid', channel: 'email',
+        send_at: new Date(now + leadTime / 2).toISOString(), status: 'pending',
+      })
+    } catch { /* Typ evtl. nicht erlaubt — Pflicht-Reminder bleiben unberührt */ }
+  }
 }

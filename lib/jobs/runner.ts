@@ -10,8 +10,22 @@ import { sendEmail, emailConfigured } from '@/lib/email/send'
 import { sendSlack, slackConfigured } from '@/lib/integrations/slack'
 import { BLOCKING_APPOINTMENT_STATUSES, isBlockingAppointmentStatus } from '@/lib/scheduling/status'
 import { buildCalendarInputFromAppointment, createCalendarEvent } from '@/lib/integrations/google-calendar'
+import { selectTemplate } from '@/lib/email/templates'
 
 const fmt = (iso: string) => new Intl.DateTimeFormat('de-DE', { timeZone: 'Europe/Berlin', dateStyle: 'full', timeStyle: 'short' }).format(new Date(iso))
+const fmtDate = (iso: string) => new Intl.DateTimeFormat('de-DE', { timeZone: 'Europe/Berlin', dateStyle: 'full' }).format(new Date(iso))
+const fmtTime = (iso: string) => new Intl.DateTimeFormat('de-DE', { timeZone: 'Europe/Berlin', timeStyle: 'short' }).format(new Date(iso))
+
+// Reminder-Typ + Termin-Art → Vorlagen-Schlüssel (im Admin pflegbar).
+function reminderTemplateKey(reminderType: string, apptType: string | null | undefined): string {
+  const closer = apptType === 'closer_call'
+  const suffix = reminderType === 'reminder_1h' ? '1H' : reminderType === 'reminder_mid' ? 'MID' : '24H'
+  return closer ? `HK-SALES-CLOSER-${suffix}` : `HK-SALES-EXPERT-CALL-${suffix}`
+}
+
+function fillVars(text: string, vars: Record<string, string>): string {
+  return text.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, k: string) => vars[k] ?? '')
+}
 
 export interface JobRunSummary {
   at: string
@@ -45,7 +59,7 @@ export async function runDueJobs(supabase: any, now: Date = new Date()): Promise
 
   const { data: reminders } = await supabase
     .from('reminder_jobs')
-    .select('*, appointment:appointments(id, status, appointment_at, lead_email_snapshot, lead:leads(contact_name,email), assigned:profiles!appointments_assigned_user_id_fkey(full_name, default_call_link))')
+    .select('*, appointment:appointments(id, type, status, appointment_at, lead_email_snapshot, lead:leads(contact_name,email,company_name), assigned:profiles!appointments_assigned_user_id_fkey(full_name, default_call_link))')
     .eq('status', 'pending').lte('send_at', nowIso).gte('send_at', cutoffIso).limit(100)
 
   for (const r of reminders || []) {
@@ -63,9 +77,34 @@ export async function runDueJobs(supabase: any, now: Date = new Date()): Promise
       const { data: claimed } = await supabase.from('reminder_jobs')
         .update({ status: 'sending' }).eq('id', r.id).eq('status', 'pending').select('id').maybeSingle()
       if (!claimed) { continue }
-      const subject = r.type === 'reminder_1h' ? 'Erinnerung: Termin in 1 Stunde' : 'Erinnerung an unseren Termin morgen'
+      // Vorlage aus email_templates bevorzugen (im Admin pflegbar), sonst Standardtext.
       const link = appt.assigned?.default_call_link ? `\nLink: ${appt.assigned.default_call_link}` : ''
-      const body = `Hallo ${appt.lead?.contact_name || ''},\n\nkurze Erinnerung an unseren Termin:\n${fmt(appt.appointment_at)}${appt.assigned?.full_name ? `\nAnsprechpartner: ${appt.assigned.full_name}` : ''}${link}\n\nBis dann!\nHK Growth`
+      let subject = r.type === 'reminder_1h' ? 'Erinnerung: Termin in 1 Stunde'
+        : r.type === 'reminder_mid' ? 'Ihr Termin mit HK Growth'
+        : 'Erinnerung an unseren Termin morgen'
+      let body = `Hallo ${appt.lead?.contact_name || ''},\n\nkurze Erinnerung an unseren Termin:\n${fmt(appt.appointment_at)}${appt.assigned?.full_name ? `\nAnsprechpartner: ${appt.assigned.full_name}` : ''}${link}\n\nBis dann!\nHK Growth`
+      try {
+        const tplKey = reminderTemplateKey(r.type, appt.type)
+        const tpl = await selectTemplate(supabase, {
+          templateKey: tplKey,
+          callType: appt.type === 'closer_call' ? 'closer_call' : 'setter_call',
+          productArea: 'system',
+        })
+        if (tpl?.id && tpl.subject && tpl.body_text) {
+          const vars: Record<string, string> = {
+            contact_first_name: (appt.lead?.contact_name || '').split(' ')[0] || '',
+            company_name: appt.lead?.company_name || '',
+            appointment_date: fmtDate(appt.appointment_at),
+            appointment_time: fmtTime(appt.appointment_at),
+            call_link: appt.assigned?.default_call_link || '',
+            assigned_setter_name: appt.assigned?.full_name || '',
+            assigned_closer_name: appt.assigned?.full_name || '',
+            assigned_opener_name: appt.assigned?.full_name || '',
+          }
+          subject = fillVars(tpl.subject, vars)
+          body = fillVars(tpl.body_text, vars)
+        }
+      } catch { /* Vorlagenfehler darf den Reminder nie brechen */ }
       const res = await sendEmail({ to, subject, body })
       if (res.ok) {
         await supabase.from('reminder_jobs').update({ status: 'sent', attempts: (r.attempts || 0) + 1 }).eq('id', r.id).eq('status', 'sending')
