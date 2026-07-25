@@ -1,7 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { DialerClient } from '@/components/leads/DialerClient'
-import { Lead, Profile } from '@/lib/types'
+import { selectScriptForLead, fetchObjectionsFor } from '@/lib/script-routing'
+import { Lead, Profile, Script, ObjectionItem, RoleContext } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
 
@@ -35,10 +36,24 @@ export default async function DialPage() {
 
   const { data: leads } = await query
 
+  // Skript + Einwände für die Rolle laden, damit im Call nichts fehlt.
+  // (Ein Skript für die ganze Warteschlange — der Einstiegswinkel des ersten
+  //  Leads bestimmt die Variante; Personalisierung passiert je Lead im Panel.)
+  const roleLabel: RoleContext =
+    profile.role === 'setter' ? 'Setter' : profile.role === 'closer' ? 'Closer' : 'Opener'
+  const firstAngle = (leads || [])[0]?.entry_angle ?? null
+
+  const [script, objections] = await Promise.all([
+    selectScriptForLead(supabase, { roleLabel, userId: user.id, entryAngle: firstAngle }),
+    fetchObjectionsFor(supabase, roleLabel, firstAngle),
+  ])
+
   return (
     <DialerClient
       profile={profile as Profile}
       initialQueue={(leads || []) as Lead[]}
+      script={script as Script | null}
+      objections={(objections || []) as ObjectionItem[]}
     />
   )
 }

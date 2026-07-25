@@ -3,7 +3,8 @@
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Lead, Profile, CallResult, RoleContext } from '@/lib/types'
+import { Lead, Profile, CallResult, RoleContext, Script, ObjectionItem } from '@/lib/types'
+import { ScriptPanel } from '@/components/leads/ScriptPanel'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -16,6 +17,7 @@ import { toast } from '@/lib/hooks/use-toast'
 import {
   Phone, PhoneOutgoing, Building2, User, Users, Globe, ChevronLeft, ChevronRight,
   Loader2, CheckCircle2, Sparkles, ExternalLink, SkipForward, AlertTriangle, ShieldAlert, Mail,
+  FileText, ChevronUp, ChevronDown,
 } from 'lucide-react'
 
 // ============================================================
@@ -30,6 +32,8 @@ import {
 interface Props {
   profile: Profile
   initialQueue: Lead[]
+  script?: Script | null
+  objections?: ObjectionItem[]
 }
 
 const roleContextFor = (role: string): RoleContext =>
@@ -46,7 +50,7 @@ const OUTCOMES: { result: CallResult; label: string; cls: string }[] = [
   { result: 'Nicht mehr kontaktieren', label: '⛔ Nicht mehr', cls: 'border-zinc-400 bg-zinc-200 text-zinc-800 hover:bg-zinc-300' },
 ]
 
-export function DialerClient({ profile, initialQueue }: Props) {
+export function DialerClient({ profile, initialQueue, script = null, objections = [] }: Props) {
   const router = useRouter()
   const [queue, setQueue] = useState<Lead[]>(initialQueue)
   const [idx, setIdx] = useState(0)
@@ -55,6 +59,8 @@ export function DialerClient({ profile, initialQueue }: Props) {
   const [called, setCalled] = useState(false)
   const [done, setDone] = useState(0)
   const [infoMailing, setInfoMailing] = useState(false)
+  // Skript standardmäßig offen für Opener/Setter (die lesen mit), sonst zu.
+  const [scriptOpen, setScriptOpen] = useState(profile.role === 'opener' || profile.role === 'setter')
 
   // "Kunde will keinen Termin, sondern Infos per Mail" → Info-Mail vorbereiten.
   async function sendInfoMail() {
@@ -275,6 +281,26 @@ export function DialerClient({ profile, initialQueue }: Props) {
               {lead.email && <span className="flex items-center gap-1">{lead.email}</span>}
             </div>
           )}
+
+          {/* Skript + Einwandbehandlung — direkt im Call, kein Seitenwechsel */}
+          <div className="rounded-lg border border-slate-200">
+            <button
+              onClick={() => setScriptOpen(o => !o)}
+              className="w-full flex items-center gap-2 px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+            >
+              <FileText className="h-4 w-4 text-slate-400" />
+              Skript &amp; Einwandbehandlung
+              {objections.length > 0 && (
+                <span className="text-xs text-slate-400">({objections.length} Einwände)</span>
+              )}
+              {scriptOpen ? <ChevronUp className="h-4 w-4 ml-auto text-slate-400" /> : <ChevronDown className="h-4 w-4 ml-auto text-slate-400" />}
+            </button>
+            {scriptOpen && (
+              <div className="border-t border-slate-200 p-3 max-h-[60vh] overflow-y-auto">
+                <ScriptPanel script={script} lead={lead} profile={profile} objections={objections} />
+              </div>
+            )}
+          </div>
 
           {/* Notiz */}
           <Textarea
