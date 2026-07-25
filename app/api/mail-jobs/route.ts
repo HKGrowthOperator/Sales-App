@@ -6,16 +6,20 @@ import { renderHkEmailHtml } from '@/lib/email/layout'
 export const dynamic = 'force-dynamic'
 
 // ============================================================
-// POST /api/admin/mail-previews — eine einzelne vorbereitete Mail
-// vor dem Versand anpassen (Betreff, Text, Empfänger).
+// POST /api/mail-jobs — eine einzelne vorbereitete Mail vor dem
+// Versand anpassen oder freigeben.
 //
 // Ändert NUR diesen einen Mail-Job — die Vorlage in
 // email_templates bleibt unberührt. Wer den Text dauerhaft für
 // alle künftigen Mails ändern will, nutzt Admin → Mail-Vorlagen.
 //
-// Das HTML wird nach jeder Änderung neu im HK-Design gerendert,
-// inklusive Termin-Box (Datum/Uhrzeit/Link aus dem Termin).
-// Body: { action: 'save', id, subject, body, to_email? }
+// Zugriff: Admin, oder wer die Mail ausgelöst hat, oder wem der
+// Lead zugewiesen ist. So kann ein Opener den Zusatz, um den der
+// Geschäftsführer im Call gebeten hat, selbst nachtragen — ohne
+// Admin-Rechte und ohne zweite Mail.
+//
+// Body: { action: 'save',    id, subject, body, to_email? }
+//       { action: 'approve', id }
 // ============================================================
 
 const TZ = 'Europe/Berlin'
@@ -28,41 +32,61 @@ const fmtTime = (iso: string) =>
 // Verschickte oder gerade sendende Mails sind tabu.
 const EDITABLE = ['draft', 'approved', 'blocked_missing_email', 'failed', 'cancelled']
 
-async function requireAdmin() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: NextResponse.json({ error: 'unauthorized' }, { status: 401 }) }
-  const { data: me } = await supabase.from('profiles').select('id, role').eq('id', user.id).single()
-  if (!me || me.role !== 'admin') return { error: NextResponse.json({ error: 'forbidden' }, { status: 403 }) }
-  return { svc: createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false } }) }
-}
+const svcClient = () =>
+  createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false } })
 
 export async function POST(req: NextRequest) {
-  const ctx = await requireAdmin()
-  if ('error' in ctx) return ctx.error
-  const { svc } = ctx
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
   let payload: any
   try { payload = await req.json() } catch { return NextResponse.json({ error: 'invalid_json' }, { status: 400 }) }
-  if (payload.action !== 'save') return NextResponse.json({ error: 'unbekannte Aktion' }, { status: 400 })
-
+  const action = payload?.action
+  if (action !== 'save' && action !== 'approve') {
+    return NextResponse.json({ error: 'unbekannte Aktion' }, { status: 400 })
+  }
   const id = typeof payload.id === 'string' ? payload.id : null
-  const subject = typeof payload.subject === 'string' ? payload.subject.trim() : ''
-  const body = typeof payload.body === 'string' ? payload.body : ''
   if (!id) return NextResponse.json({ error: 'id fehlt' }, { status: 400 })
-  if (!subject) return NextResponse.json({ error: 'Betreff darf nicht leer sein' }, { status: 400 })
-  if (!body.trim()) return NextResponse.json({ error: 'Text darf nicht leer sein' }, { status: 400 })
+
+  const svc = svcClient()
 
   const { data: job, error: loadErr } = await svc
     .from('email_jobs')
-    .select('id, status, to_email, appointment_id')
+    .select('id, status, to_email, appointment_id, created_by, lead:leads(id, assigned_to)')
     .eq('id', id)
     .maybeSingle()
   if (loadErr) return NextResponse.json({ ok: false, error: loadErr.message }, { status: 500 })
   if (!job) return NextResponse.json({ error: 'Mail nicht gefunden' }, { status: 404 })
+
+  // Berechtigung: Admin, Auslöser der Mail oder Besitzer des Leads.
+  const { data: me } = await svc.from('profiles').select('role').eq('id', user.id).single()
+  const leadRow: any = Array.isArray(job.lead) ? job.lead[0] : job.lead
+  const mayEdit =
+    me?.role === 'admin' ||
+    job.created_by === user.id ||
+    (leadRow?.assigned_to && leadRow.assigned_to === user.id)
+  if (!mayEdit) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+
   if (!EDITABLE.includes(job.status)) {
     return NextResponse.json({ error: `Mail mit Status „${job.status}" kann nicht mehr geändert werden` }, { status: 409 })
   }
+
+  // ── Freigeben ──────────────────────────────────────────────
+  if (action === 'approve') {
+    if (!job.to_email) return NextResponse.json({ error: 'Ohne Empfängeradresse ist keine Freigabe möglich' }, { status: 400 })
+    const { data, error } = await svc
+      .from('email_jobs').update({ status: 'approved' }).eq('id', id)
+      .select('id, status').single()
+    if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
+    return NextResponse.json({ ok: true, job: data })
+  }
+
+  // ── Speichern ──────────────────────────────────────────────
+  const subject = typeof payload.subject === 'string' ? payload.subject.trim() : ''
+  const body = typeof payload.body === 'string' ? payload.body : ''
+  if (!subject) return NextResponse.json({ error: 'Betreff darf nicht leer sein' }, { status: 400 })
+  if (!body.trim()) return NextResponse.json({ error: 'Text darf nicht leer sein' }, { status: 400 })
 
   // Empfänger darf mitgeändert werden — sonst bleiben Mails ohne
   // Adresse für immer blockiert.
