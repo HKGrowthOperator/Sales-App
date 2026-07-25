@@ -5,6 +5,36 @@
 // Wird von CallNoteForm (Opener/Setter/Closer) aufgerufen.
 // ============================================================
 import { Lead, Profile, CallResult, RoleContext, LeadStatus, LeadScore } from '@/lib/types'
+import { selectTemplate, productAreaFromEntryAngle } from '@/lib/email/templates'
+
+/** Holt Betreff/Text aus einer Admin-Vorlage; null, wenn keine gepflegt ist. */
+async function templateMail(
+  supabase: any,
+  templateKey: string,
+  lead: Lead,
+  profile: Profile,
+): Promise<{ subject: string; body: string } | null> {
+  try {
+    const tpl = await selectTemplate(supabase, {
+      templateKey,
+      callType: 'setter_call',
+      productArea: productAreaFromEntryAngle(lead.entry_angle),
+    })
+    if (!tpl?.id || !tpl.subject || !tpl.body_text) return null
+    const vars: Record<string, string> = {
+      contact_first_name: (lead.contact_name || '').split(' ')[0] || '',
+      contact_name: lead.contact_name || '',
+      company_name: lead.company_name || '',
+      assigned_opener_name: profile.full_name || 'HK Growth Operator',
+      assigned_setter_name: profile.full_name || 'HK Growth Operator',
+      assigned_closer_name: profile.full_name || 'HK Growth Operator',
+    }
+    const fill = (s: string) => s.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, k: string) => vars[k] ?? '')
+    return { subject: fill(tpl.subject), body: fill(tpl.body_text) }
+  } catch {
+    return null
+  }
+}
 
 // Welcher Lead-Status folgt aus Rolle + Call-Ergebnis
 function nextStatusFor(role: RoleContext, result: CallResult): LeadStatus | null {
@@ -158,13 +188,15 @@ export async function runCallNoteAutomations(input: CallNoteAutomationInput): Pr
   if (result === 'Interessiert') {
     const to = lead.email || null
     const firstName = (lead.contact_name || '').split(' ')[0]
-    const angle = lead.entry_angle ? ` rund um ${lead.entry_angle}` : ''
-    const body = `Hallo ${firstName || ''},\n\nvielen Dank für das kurze Gespräch — schön, dass HK Growth${angle} für Sie interessant ist.\n\nWie besprochen schicke ich Ihnen vorab ein paar Eindrücke, damit Sie ein Gefühl für unsere Arbeit bekommen. Für die nächsten Schritte schlage ich ein kurzes, unverbindliches Gespräch vor, in dem wir konkret auf Ihre Situation schauen.\n\nPasst es Ihnen diese oder nächste Woche? Dann halte ich einen Termin für Sie frei.\n\nBeste Grüße\n${profile.full_name || 'HK Growth'}`
+    // Nutzt dieselbe gepflegte Info-Mail wie der Dialer-Pfad „Schicken Sie mir Infos".
+    const tpl = await templateMail(supabase, 'HK-SALES-INFO-MAIL', lead, profile)
+    const subject = tpl?.subject || 'HK Growth Operator – Ihre nächsten Schritte'
+    const body = tpl?.body
+      || `Hallo ${firstName || ''},\n\nvielen Dank für das kurze Gespräch. Wie besprochen schicke ich Ihnen die Unterlagen.\n\nFür die nächsten Schritte schlage ich ein kurzes, unverbindliches Gespräch vor, in dem wir konkret auf Ihre Situation schauen.\n\nBeste Grüße\n${profile.full_name || 'HK Growth Operator'}`
     try {
       await supabase.from('email_jobs').insert({
         lead_id: lead.id, type: 'nurture', to_email: to,
-        subject: 'HK Growth – Ihre nächsten Schritte',
-        body,
+        subject, body,
         status: to ? 'draft' : 'blocked_missing_email',
         created_from_event: 'LEAD_INTERESTED', created_by: profile.id,
       })
@@ -174,11 +206,14 @@ export async function runCallNoteAutomations(input: CallNoteAutomationInput): Pr
   // ── 5. Gewonnen → Onboarding-Mail-Preview (kein Blindversand) ──────────────
   if (result === 'Gewonnen') {
     const to = lead.email || null
-    const body = `Hallo ${lead.contact_name || ''},\n\nherzlich willkommen bei HK Growth — wir freuen uns sehr auf die Zusammenarbeit!\n\nAls nächste Schritte melden wir uns kurz für das Onboarding:\n- kurzer Kickoff-Termin\n- Zugänge & Materialien klären\n- Ziele und Fahrplan für die ersten 30 Tage\n\nBeste Grüße\n${profile.full_name || 'HK Growth'}`
+    const tpl = await templateMail(supabase, 'HK-SALES-ONBOARDING', lead, profile)
+    const subject = tpl?.subject || 'Willkommen bei HK Growth Operator'
+    const body = tpl?.body
+      || `Hallo ${(lead.contact_name || '').split(' ')[0] || ''},\n\nherzlich willkommen bei HK Growth Operator — wir freuen uns auf die Zusammenarbeit.\n\nAls nächste Schritte melden wir uns für das Onboarding:\n- Prozessaufnahme\n- Zugänge und Materialien klären\n- Fahrplan für die ersten Wochen\n\nBeste Grüße\n${profile.full_name || 'HK Growth Operator'}`
     try {
       await supabase.from('email_jobs').insert({
         lead_id: lead.id, type: 'onboarding', to_email: to,
-        subject: 'Willkommen bei HK Growth – Ihre nächsten Schritte', body,
+        subject, body,
         status: to ? 'draft' : 'blocked_missing_email',
         created_from_event: 'DEAL_WON', created_by: profile.id,
       })
