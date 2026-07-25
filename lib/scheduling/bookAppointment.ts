@@ -178,7 +178,8 @@ async function createMailPreview(supabase: any, p: any): Promise<string> {
   const isSetter = map.mailType === 'setter_call_confirmation'
   const callType: CallType = isSetter ? 'setter_call' : 'closer_call'
   const roleType: 'setter' | 'closer' = isSetter ? 'setter' : 'closer'
-  const templateKey = isSetter ? 'setter_booking_confirmation' : 'closer_booking_confirmation'
+  // Schlüssel identisch zu den im Admin pflegbaren Vorlagen (Mail-Vorlagen-Editor).
+  const templateKey = isSetter ? 'HK-SALES-EXPERT-CALL-BOOKED' : 'HK-SALES-CLOSER-BOOKED'
   const productArea = productAreaFromEntryAngle(lead.entry_angle)
   const expert = assignee.full_name || 'HK Growth'
 

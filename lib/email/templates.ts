@@ -113,6 +113,8 @@ export function buildTemplateVars(p: {
     setter_name: p.setterName || null,
     closer_name: p.closerName || null,
     zoom_link: p.zoomLink || null,
+    // Alias: die Vorlagen nutzen {{call_link}} (neutraler als „zoom").
+    call_link: p.zoomLink || null,
     product_area: p.productArea,
     product_label: PRODUCT_LABEL[p.productArea],
     recommended_offer: p.recommendedOffer || null,

@@ -175,8 +175,9 @@ export function renderHkEmailHtml({ bodyText, subject, vars = {}, callType }: Hk
 
         <!-- Kopf: Smaragd mit goldenem Schriftzug (reiner Text, kein Bild) -->
         <tr>
-          <td style="background:${C.emerald};padding:34px 40px 30px;text-align:center;">
-            <div style="color:${C.goldLight};font-size:26px;letter-spacing:.22em;font-weight:400;">H K &nbsp;G R O W T H</div>
+          <td style="background:${C.emerald};padding:38px 40px 32px;text-align:center;border-bottom:2px solid ${C.gold};">
+            <div style="color:${C.goldLight};font-size:11px;letter-spacing:.3em;text-transform:uppercase;margin-bottom:14px;opacity:.65;">Growth Operator</div>
+            <div style="color:${C.goldLight};font-size:27px;letter-spacing:.24em;font-weight:400;line-height:1.2;">H K &nbsp;G R O W T H</div>
             <table role="presentation" cellpadding="0" cellspacing="0" align="center" style="margin:14px auto 0;">
               <tr>
                 <td style="width:60px;border-top:1px solid ${C.gold};font-size:0;line-height:0;">&nbsp;</td>
@@ -184,8 +185,9 @@ export function renderHkEmailHtml({ bodyText, subject, vars = {}, callType }: Hk
                 <td style="width:60px;border-top:1px solid ${C.gold};font-size:0;line-height:0;">&nbsp;</td>
               </tr>
             </table>
-            <div style="color:${C.gold};font-size:10px;letter-spacing:.28em;text-transform:uppercase;margin-top:12px;">
-              Designing Excellence
+            <div style="color:${C.gold};font-size:10px;letter-spacing:.26em;text-transform:uppercase;margin-top:12px;line-height:1.9;">
+              Designing Excellence<br>
+              <span style="color:${C.goldLight};opacity:.72;letter-spacing:.22em;">One Step at a Time</span>
             </div>
           </td>
         </tr>
@@ -206,10 +208,11 @@ export function renderHkEmailHtml({ bodyText, subject, vars = {}, callType }: Hk
           </td>
         </tr>
         <tr>
-          <td style="padding:20px 40px 30px;color:${C.muted};font-size:12px;line-height:1.7;">
-            <span style="color:${C.ink};letter-spacing:.06em;">HK GROWTH OPERATOR</span> &nbsp;·&nbsp; Gummersbach<br>
-            Sie erhalten diese Nachricht, weil wir mit Ihnen im geschäftlichen Austausch stehen.
-            Möchten Sie keine weiteren Nachrichten, genügt eine kurze Antwort.
+          <td style="padding:20px 40px 32px;color:${C.muted};font-size:12px;line-height:1.75;">
+            <span style="color:${C.ink};letter-spacing:.08em;font-size:11px;">HK GROWTH OPERATOR</span>
+            &nbsp;·&nbsp; Auftrags- &amp; Prozessautomation &nbsp;·&nbsp; Gummersbach<br>
+            <span style="font-size:11px;">Sie erhalten diese Nachricht, weil wir mit Ihnen im geschäftlichen Austausch stehen.
+            Möchten Sie keine weiteren Nachrichten, genügt eine kurze Antwort.</span>
           </td>
         </tr>
       </table>
