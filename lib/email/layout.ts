@@ -11,6 +11,23 @@ export interface HkEmailLayoutArgs {
   callType?: string
 }
 
+// HK-Markenfarben: dunkles Smaragd + Gold auf cremefarbenem Briefbogen.
+// Bewusst OHNE Bilder gebaut — der Schriftzug entsteht aus Text, damit
+// nichts blockiert wird, nichts nachgeladen werden muss und keine
+// Anhänge entstehen. Die Mail ist die Mail.
+const C = {
+  emerald:   '#0E2E26',
+  emeraldDk: '#0A211B',
+  gold:      '#C9A063',
+  goldLight: '#E7CF9F',
+  goldSoft:  '#E3D6BC',
+  paper:     '#FBF9F5',
+  panel:     '#F4F0E8',
+  ink:       '#14251F',
+  body:      '#2A3A34',
+  muted:     '#7C8A83',
+}
+
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, '&amp;')
@@ -41,15 +58,15 @@ function textToHtml(text: string, opts: { hasAppointmentBox?: boolean } = {}): s
 
     // Trennlinie
     if (lines.length === 1 && SEPARATOR.test(lines[0].trim())) {
-      out.push('<hr style="border:0;border-top:1px solid #e2e8f0;margin:26px 0;">')
+      out.push(`<div style="border-top:1px solid ${C.goldSoft};margin:28px 0;font-size:0;line-height:0;">&nbsp;</div>`)
       continue
     }
 
     // Überschrift (einzeilig, VERSALIEN)
     if (lines.length === 1 && HEADING.test(lines[0].trim())) {
       out.push(
-        `<p style="margin:28px 0 10px;font-size:12px;font-weight:700;letter-spacing:.1em;` +
-        `text-transform:uppercase;color:#2563eb;">${lines[0].trim()}</p>`,
+        `<p style="margin:30px 0 12px;font-size:11px;font-weight:700;letter-spacing:.16em;` +
+        `text-transform:uppercase;color:${C.gold};font-family:Georgia,'Times New Roman',serif;">${lines[0].trim()}</p>`,
       )
       continue
     }
@@ -69,10 +86,10 @@ function textToHtml(text: string, opts: { hasAppointmentBox?: boolean } = {}): s
         `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 18px;">` +
         items.map((it, i) => `
           <tr>
-            <td style="padding:3px 10px 3px 0;color:#2563eb;font-size:15px;font-weight:700;vertical-align:top;width:22px;">
-              ${numbered ? i + 1 + '.' : '&bull;'}
+            <td style="padding:5px 12px 5px 0;color:${C.gold};font-size:14px;font-weight:700;vertical-align:top;width:24px;">
+              ${numbered ? i + 1 + '.' : '&#10022;'}
             </td>
-            <td style="padding:3px 0;color:#0f172a;font-size:15px;line-height:1.6;">${it}</td>
+            <td style="padding:5px 0;color:${C.body};font-size:15px;line-height:1.65;">${it}</td>
           </tr>`).join('') +
         `</table>`,
       )
@@ -82,7 +99,7 @@ function textToHtml(text: string, opts: { hasAppointmentBox?: boolean } = {}): s
     // Normaler Absatz (bei vorhandener Box ohne die Termin-Zeilen)
     const kept = opts.hasAppointmentBox ? lines.filter((l) => !APPT_LINE.test(l.trim())) : lines
     const body = kept.join('\n').trim()
-    if (body) out.push(`<p style="margin:0 0 16px;line-height:1.65;color:#0f172a;">${body.replace(/\n/g, '<br>')}</p>`)
+    if (body) out.push(`<p style="margin:0 0 17px;line-height:1.7;color:${C.body};font-size:15px;">${body.replace(/\n/g, '<br>')}</p>`)
   }
 
   return out.join('\n')
@@ -101,29 +118,31 @@ export function renderHkEmailHtml({ bodyText, subject, vars = {}, callType }: Hk
 
   const detailRow = (label: string, value: string) => `
     <tr>
-      <td style="padding:6px 0;color:#64748b;font-size:14px;width:110px;vertical-align:top;">${label}</td>
-      <td style="padding:6px 0;color:#0f172a;font-size:14px;font-weight:600;">${value}</td>
+      <td style="padding:7px 0;color:${C.muted};font-size:13px;letter-spacing:.06em;text-transform:uppercase;width:110px;vertical-align:top;">${label}</td>
+      <td style="padding:7px 0;color:${C.ink};font-size:15px;font-weight:600;font-family:Georgia,'Times New Roman',serif;">${value}</td>
     </tr>`
 
   const appointmentBox =
     date || time || link
       ? `
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
-         style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:12px;margin:8px 0 24px;">
-    <tr><td style="padding:18px 22px;">
-      <div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#2563eb;font-weight:700;margin-bottom:8px;">${badge}</div>
+         style="background:${C.panel};border:1px solid ${C.goldSoft};border-radius:4px;margin:4px 0 28px;">
+    <tr><td style="padding:22px 24px;">
+      <div style="font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:${C.gold};font-weight:700;margin-bottom:12px;">${badge}</div>
       <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
         ${date ? detailRow('Datum', escapeHtml(date)) : ''}
         ${time ? detailRow('Uhrzeit', `${escapeHtml(time)} Uhr`) : ''}
         ${duration ? detailRow('Dauer', `ca. ${escapeHtml(duration)}`) : ''}
-        ${expert ? detailRow('Ihr Experte', escapeHtml(expert)) : ''}
+        ${expert ? detailRow('Experte', escapeHtml(expert)) : ''}
         ${
+          // Button NUR wenn ein echter Link vorliegt — sonst kein toter Knopf.
           link
-            ? `<tr><td colspan="2" style="padding-top:14px;">
+            ? `<tr><td colspan="2" style="padding-top:18px;">
                  <a href="${escapeHtml(link)}"
-                    style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;
-                           font-size:14px;font-weight:700;padding:11px 22px;border-radius:8px;">
-                   Zum Termin (Video-Call öffnen)
+                    style="display:inline-block;background:${C.emerald};color:${C.goldLight};text-decoration:none;
+                           font-size:14px;font-weight:600;letter-spacing:.04em;padding:13px 26px;border-radius:3px;
+                           border:1px solid ${C.gold};font-family:Georgia,'Times New Roman',serif;">
+                   Zum Termin
                  </a>
                </td></tr>`
             : ''
@@ -147,42 +166,50 @@ export function renderHkEmailHtml({ bodyText, subject, vars = {}, callType }: Hk
 <meta name="color-scheme" content="light">
 <title>${escapeHtml(subject)}</title>
 </head>
-<body style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;">
+<body style="margin:0;padding:0;background:${C.emeraldDk};font-family:Georgia,'Times New Roman',serif;-webkit-font-smoothing:antialiased;">
   <div style="display:none;max-height:0;overflow:hidden;opacity:0;">${preheader}</div>
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:32px 12px;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.emeraldDk};padding:36px 12px;">
     <tr><td align="center">
       <table role="presentation" width="600" cellpadding="0" cellspacing="0"
-             style="max-width:600px;width:100%;background:#ffffff;border-radius:16px;overflow:hidden;
-                    box-shadow:0 4px 16px rgba(15,23,42,.08);">
-        <!-- Header -->
+             style="max-width:600px;width:100%;background:${C.paper};border-radius:5px;overflow:hidden;">
+
+        <!-- Kopf: Smaragd mit goldenem Schriftzug (reiner Text, kein Bild) -->
         <tr>
-          <td style="background:#0f172a;padding:26px 36px;">
-            <table role="presentation" cellpadding="0" cellspacing="0"><tr>
-              <td style="vertical-align:middle;">
-                <span style="display:inline-block;background:#2563eb;color:#ffffff;font-weight:800;
-                             font-size:16px;padding:7px 11px;border-radius:9px;letter-spacing:-.5px;">HK</span>
-              </td>
-              <td style="vertical-align:middle;padding-left:12px;">
-                <div style="color:#ffffff;font-size:15px;font-weight:600;letter-spacing:-.2px;">HK Growth Operator</div>
-                <div style="color:#94a3b8;font-size:11px;letter-spacing:.12em;text-transform:uppercase;margin-top:2px;">Systeme für den Mittelstand</div>
-              </td>
-            </tr></table>
+          <td style="background:${C.emerald};padding:34px 40px 30px;text-align:center;">
+            <div style="color:${C.goldLight};font-size:26px;letter-spacing:.22em;font-weight:400;">H K &nbsp;G R O W T H</div>
+            <table role="presentation" cellpadding="0" cellspacing="0" align="center" style="margin:14px auto 0;">
+              <tr>
+                <td style="width:60px;border-top:1px solid ${C.gold};font-size:0;line-height:0;">&nbsp;</td>
+                <td style="padding:0 10px;color:${C.gold};font-size:10px;line-height:1;">&#10022;</td>
+                <td style="width:60px;border-top:1px solid ${C.gold};font-size:0;line-height:0;">&nbsp;</td>
+              </tr>
+            </table>
+            <div style="color:${C.gold};font-size:10px;letter-spacing:.28em;text-transform:uppercase;margin-top:12px;">
+              Designing Excellence
+            </div>
           </td>
         </tr>
-        <!-- Body -->
+
+        <!-- Inhalt auf Briefbogen -->
         <tr>
-          <td style="padding:36px 36px 30px;color:#0f172a;font-size:15px;">
+          <td style="padding:40px 40px 34px;color:${C.body};font-size:15px;
+                     font-family:Georgia,'Times New Roman',serif;">
             ${appointmentBox}
             ${textToHtml(bodyText, { hasAppointmentBox: !!(date || time || link) })}
           </td>
         </tr>
-        <!-- Footer -->
+
+        <!-- Fuß -->
         <tr>
-          <td style="padding:22px 36px 26px;border-top:1px solid #e2e8f0;background:#f8fafc;
-                     color:#94a3b8;font-size:12px;line-height:1.7;">
-            <span style="color:#475569;font-weight:600;">HK Growth Operator</span> · Gummersbach<br>
+          <td style="padding:0 40px;">
+            <div style="border-top:1px solid ${C.goldSoft};font-size:0;line-height:0;">&nbsp;</div>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:20px 40px 30px;color:${C.muted};font-size:12px;line-height:1.7;">
+            <span style="color:${C.ink};letter-spacing:.06em;">HK GROWTH OPERATOR</span> &nbsp;·&nbsp; Gummersbach<br>
             Sie erhalten diese Nachricht, weil wir mit Ihnen im geschäftlichen Austausch stehen.
-            Wenn Sie keine weiteren Nachrichten wünschen, genügt eine kurze Antwort.
+            Möchten Sie keine weiteren Nachrichten, genügt eine kurze Antwort.
           </td>
         </tr>
       </table>
