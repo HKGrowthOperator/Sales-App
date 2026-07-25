@@ -45,7 +45,7 @@ export function MailPreviewsClient({ jobs }: { jobs: any[] }) {
   async function saveEdit(id: string) {
     setBusy(id)
     try {
-      const res = await fetch('/api/admin/mail-previews', {
+      const res = await fetch('/api/mail-jobs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'save', id, ...draft }),

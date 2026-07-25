@@ -59,6 +59,11 @@ export function DialerClient({ profile, initialQueue, script = null, objections 
   const [called, setCalled] = useState(false)
   const [done, setDone] = useState(0)
   const [infoMailing, setInfoMailing] = useState(false)
+  // Vorbereitete Info-Mail zum direkten Anpassen — falls der Kunde im
+  // Call noch um eine Ergänzung gebeten hat, wandert sie in dieselbe
+  // Mail statt in eine zweite.
+  const [mailDraft, setMailDraft] = useState<{ id: string; subject: string; body: string; to_email: string } | null>(null)
+  const [mailBusy, setMailBusy] = useState(false)
   // Skript standardmäßig offen für Opener/Setter (die lesen mit), sonst zu.
   const [scriptOpen, setScriptOpen] = useState(profile.role === 'opener' || profile.role === 'setter')
 
@@ -79,13 +84,53 @@ export function DialerClient({ profile, initialQueue, script = null, objections 
       } else {
         toast({
           title: 'Info-Mail vorbereitet',
-          description: data.usedTemplate ? 'Liegt zur Freigabe in den Mail-Previews.' : '⚠️ Standardtext — Vorlage im Admin hinterlegen.',
+          description: data.usedTemplate ? 'Liegt als Entwurf bereit.' : '⚠️ Standardtext — Vorlage im Admin hinterlegen.',
+        })
+      }
+      if (data.job?.id) {
+        setMailDraft({
+          id: data.job.id,
+          subject: data.job.subject || '',
+          body: data.job.body || '',
+          to_email: data.job.to_email || '',
         })
       }
     } catch {
       toast({ title: 'Fehler', description: 'Info-Mail konnte nicht erstellt werden.', variant: 'destructive' })
     } finally {
       setInfoMailing(false)
+    }
+  }
+
+  /** Speichert die Anpassung an dieser einen Mail — optional gleich mit Freigabe. */
+  async function saveMailDraft(approve: boolean) {
+    if (!mailDraft || mailBusy) return
+    setMailBusy(true)
+    try {
+      const save = await fetch('/api/mail-jobs', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'save', ...mailDraft }),
+      })
+      const saved = await save.json().catch(() => ({}))
+      if (!save.ok || !saved.ok) throw new Error(saved.error || 'Speichern fehlgeschlagen')
+
+      if (approve) {
+        const ok = await fetch('/api/mail-jobs', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'approve', id: mailDraft.id }),
+        })
+        const out = await ok.json().catch(() => ({}))
+        if (!ok.ok || !out.ok) throw new Error(out.error || 'Freigabe fehlgeschlagen')
+      }
+      setMailDraft(null)
+      toast({
+        title: approve ? 'Freigegeben' : 'Gespeichert',
+        description: approve ? 'Die Mail geht beim nächsten Lauf raus.' : 'Liegt als Entwurf zur Freigabe bereit.',
+      })
+    } catch (e: any) {
+      toast({ title: 'Fehler', description: e?.message || String(e), variant: 'destructive' })
+    } finally {
+      setMailBusy(false)
     }
   }
 
@@ -319,6 +364,54 @@ export function DialerClient({ profile, initialQueue, script = null, objections 
             {infoMailing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
             „Schicken Sie mir Infos" → Info-Mail vorbereiten
           </button>
+
+          {/* Anpassen der gerade vorbereiteten Mail — für den Fall, dass der
+              Kunde im Gespräch noch um eine Ergänzung gebeten hat. Optional:
+              ohne Anfassen geht die Vorlage unverändert raus. */}
+          {mailDraft && (
+            <div className="rounded-lg border border-violet-200 bg-violet-50/50 p-3 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-medium text-violet-800">
+                  Mail an {mailDraft.to_email || '— keine Adresse —'}
+                </p>
+                <button onClick={() => setMailDraft(null)} className="text-xs text-slate-400 hover:text-slate-600">
+                  schließen
+                </button>
+              </div>
+              <p className="text-[11px] text-slate-500">
+                Hat der Kunde noch etwas verlangt? Hier ergänzen — dann geht alles in einer Mail raus.
+                Die Vorlage bleibt unverändert.
+              </p>
+              {!mailDraft.to_email && (
+                <input
+                  type="email"
+                  value={mailDraft.to_email}
+                  onChange={e => setMailDraft({ ...mailDraft, to_email: e.target.value })}
+                  placeholder="E-Mail-Adresse nachtragen"
+                  className="w-full text-sm rounded border border-violet-200 px-2 py-1.5"
+                />
+              )}
+              <input
+                value={mailDraft.subject}
+                onChange={e => setMailDraft({ ...mailDraft, subject: e.target.value })}
+                className="w-full text-sm rounded border border-violet-200 px-2 py-1.5"
+              />
+              <textarea
+                value={mailDraft.body}
+                onChange={e => setMailDraft({ ...mailDraft, body: e.target.value })}
+                rows={10}
+                className="w-full text-xs font-mono rounded border border-violet-200 px-2 py-1.5 leading-relaxed"
+              />
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" disabled={mailBusy} onClick={() => saveMailDraft(true)}>
+                  {mailBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null} Speichern &amp; freigeben
+                </Button>
+                <Button size="sm" variant="outline" disabled={mailBusy} onClick={() => saveMailDraft(false)}>
+                  Nur speichern
+                </Button>
+              </div>
+            </div>
+          )}
 
           {/* Ergebnis-Buttons */}
           <div>

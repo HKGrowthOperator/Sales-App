@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
     status: to ? (body.send === true ? 'approved' : 'draft') : 'blocked_missing_email',
     created_from_event: 'INFO_MAIL_REQUESTED',
     created_by: user.id,
-  }).select('id, status').single()
+  }).select('id, status, subject, body, to_email').single()
 
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
 
@@ -103,5 +103,10 @@ export async function POST(req: NextRequest) {
     status: job?.status,
     usedTemplate: !!tpl?.id,
     missingEmail: !to,
+    // Der Dialer bietet direkt danach das Anpassen an — damit ein Zusatz,
+    // um den der Kunde im Call gebeten hat, in dieselbe Mail wandert.
+    job: job
+      ? { id: job.id, subject: job.subject, body: job.body, to_email: job.to_email }
+      : null,
   })
 }
