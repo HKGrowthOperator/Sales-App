@@ -6,6 +6,7 @@
 // ============================================================
 import { APPOINTMENT_STATUS, BLOCKING_APPOINTMENT_STATUSES, CALENDAR_SYNC, isTerminalAppointmentStatus } from '@/lib/scheduling/status'
 import { isSlotBookable } from '@/lib/scheduling/slots'
+import { selectTemplate } from '@/lib/email/templates'
 
 type Supabase = any
 
@@ -178,12 +179,35 @@ export async function markNoShow(a: NoShowArgs): Promise<ActionResult> {
     appointment_id: a.appointmentId, note: a.note || 'Lead war beim Termin nicht erreichbar — reaktivieren.', status: 'offen',
   })
 
-  // Reaktivierungs-Mail-Preview
+  // No-Show-Mail — Text bevorzugt aus der Admin-Vorlage HK-SALES-NO-SHOW
+  // (FOMO-Ansprache), sonst neutraler Fallback.
+  let nsSubject = 'Wir haben Sie verpasst – neuer Termin?'
+  let nsBody = `Hallo ${appt.lead?.contact_name || ''},\n\nschade, dass es heute nicht geklappt hat. Wenn das Thema weiterhin relevant ist, finden wir gern einen neuen Termin.\n\nBeste Grüße\nHK Growth`
+  try {
+    const tpl = await selectTemplate(a.supabase, {
+      templateKey: 'HK-SALES-NO-SHOW',
+      callType: role === 'closer' ? 'closer_call' : 'setter_call',
+      productArea: 'system',
+    })
+    if (tpl?.id && tpl.subject && tpl.body_text) {
+      const at = appt.appointment_at as string | undefined
+      const vars: Record<string, string> = {
+        contact_first_name: (appt.lead?.contact_name || '').split(' ')[0] || '',
+        company_name: appt.lead?.company_name || '',
+        appointment_date: at ? new Intl.DateTimeFormat('de-DE', { timeZone: 'Europe/Berlin', dateStyle: 'full' }).format(new Date(at)) : '',
+        appointment_time: at ? new Intl.DateTimeFormat('de-DE', { timeZone: 'Europe/Berlin', timeStyle: 'short' }).format(new Date(at)) : '',
+      }
+      const fill = (s: string) => s.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, k: string) => vars[k] ?? '')
+      nsSubject = fill(tpl.subject)
+      nsBody = fill(tpl.body_text)
+    }
+  } catch { /* Vorlagenfehler darf den No-Show-Ablauf nie brechen */ }
+
   const mailStatus = await createMail(a.supabase, {
     leadId: appt.lead_id, appointmentId: a.appointmentId, type: 'reactivation',
     toEmail: appt.lead?.email || appt.lead_email_snapshot || null,
-    subject: 'Wir haben Sie verpasst – neuer Termin?', event: 'NO_SHOW_RECORDED', actor: a.actorUserId,
-    body: `Hallo ${appt.lead?.contact_name || ''},\n\nschade, dass es heute nicht geklappt hat. Wenn das Thema weiterhin relevant ist, finden wir gern einen neuen Termin.\n\nBeste Grüße\nHK Growth`,
+    subject: nsSubject, event: 'NO_SHOW_RECORDED', actor: a.actorUserId,
+    body: nsBody,
   })
 
   const kpiEvent = role === 'closer' ? 'CLOSER_CALL_NO_SHOW' : 'SETTER_CALL_NO_SHOW'
