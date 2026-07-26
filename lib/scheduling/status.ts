@@ -4,6 +4,19 @@
 // Die DB nutzt den deutschen appointment_status-Enum.
 // ============================================================
 
+/**
+ * Erkennt einen Closer-Termin.
+ *
+ * In der Datenbank steht der deutsche Wert 'Closer-Call' (siehe MAP in
+ * bookAppointment). An anderen Stellen wird 'closer_call' verwendet.
+ * Beides wird akzeptiert, damit ein Vokabularwechsel nicht wieder still
+ * die falsche Vorlage zieht.
+ */
+export function isCloserAppointment(value: string | null | undefined): boolean {
+  if (!value) return false
+  return /closer/i.test(value)
+}
+
 export const APPOINTMENT_STATUS = {
   PLANNED:   'Geplant',
   CONFIRMED: 'Bestätigt',

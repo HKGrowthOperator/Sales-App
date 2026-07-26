@@ -8,7 +8,7 @@
 import { getFlags, googleConfigured } from '@/lib/settings'
 import { sendEmail, emailConfigured } from '@/lib/email/send'
 import { sendSlack, slackConfigured } from '@/lib/integrations/slack'
-import { BLOCKING_APPOINTMENT_STATUSES, isBlockingAppointmentStatus } from '@/lib/scheduling/status'
+import { BLOCKING_APPOINTMENT_STATUSES, isBlockingAppointmentStatus, isCloserAppointment } from '@/lib/scheduling/status'
 import { buildCalendarInputFromAppointment, createCalendarEvent } from '@/lib/integrations/google-calendar'
 import { selectTemplate } from '@/lib/email/templates'
 import { renderHkEmailHtml } from '@/lib/email/layout'
@@ -48,7 +48,7 @@ async function markEmailFailed(supabase: any, id: string, reason: string | undef
  * wird der Reihe nach gesucht und die erste vorhandene Vorlage genommen.
  */
 function reminderTemplateKeys(reminderType: string, apptType: string | null | undefined): string[] {
-  const closer = apptType === 'closer_call'
+  const closer = isCloserAppointment(apptType)
   const suffix = reminderType === 'reminder_1h' ? '1H' : reminderType === 'reminder_mid' ? 'MID' : '24H'
   const keys = closer
     ? [`HK-SALES-CLOSER-${suffix}`, `HK-SALES-EXPERT-CALL-${suffix}`]
@@ -72,6 +72,9 @@ export interface JobRunSummary {
   emails: { processed: number; sent: number; failed: number; skipped: number }
   calendar: { processed: number; synced: number; failed: number; skipped: number }
   notifications: { processed: number; sent: number; failed: number; skipped: number }
+  /** Fehler, die frueher still verschluckt wurden — z. B. eine fehlgeschlagene
+   *  Abfrage. Ohne sie sah ein kaputter Durchlauf wie ein leerer aus. */
+  errors: string[]
 }
 
 export async function runDueJobs(supabase: any, now: Date = new Date()): Promise<JobRunSummary> {
@@ -85,6 +88,7 @@ export async function runDueJobs(supabase: any, now: Date = new Date()): Promise
     emails: { processed: 0, sent: 0, failed: 0, skipped: 0 },
     calendar: { processed: 0, synced: 0, failed: 0, skipped: 0 },
     notifications: { processed: 0, sent: 0, failed: 0, skipped: 0 },
+    errors: [],
   }
 
   // ── 1) Fällige Reminder ────────────────────────────────────────────────────
@@ -93,10 +97,14 @@ export async function runDueJobs(supabase: any, now: Date = new Date()): Promise
   await supabase.from('reminder_jobs').update({ status: 'cancelled', last_error: 'stale (Backlog übersprungen)' })
     .eq('status', 'pending').lt('send_at', cutoffIso)
 
-  const { data: reminders } = await supabase
+  // Die Spalte heisst appointment_type, nicht type. Mit dem falschen Namen
+  // scheiterte die gesamte Abfrage — und weil der Fehler verworfen wurde,
+  // lief der Durchlauf still mit null Remindern durch.
+  const { data: reminders, error: remErr } = await supabase
     .from('reminder_jobs')
-    .select('*, appointment:appointments(id, type, status, appointment_at, lead_email_snapshot, lead:leads(contact_name,email,company_name), assigned:profiles!appointments_assigned_user_id_fkey(full_name, default_call_link))')
+    .select('*, appointment:appointments(id, appointment_type, status, appointment_at, lead_email_snapshot, lead:leads(contact_name,email,company_name), assigned:profiles!appointments_assigned_user_id_fkey(full_name, default_call_link))')
     .eq('status', 'pending').lte('send_at', nowIso).gte('send_at', cutoffIso).limit(100)
+  if (remErr) sum.errors.push(`Reminder-Abfrage: ${remErr.message}`)
 
   for (const r of reminders || []) {
     sum.reminders.processed++
@@ -121,10 +129,10 @@ export async function runDueJobs(supabase: any, now: Date = new Date()): Promise
       let body = `Hallo ${appt.lead?.contact_name || ''},\n\nkurze Erinnerung an unseren Termin:\n${fmt(appt.appointment_at)}${appt.assigned?.full_name ? `\nAnsprechpartner: ${appt.assigned.full_name}` : ''}${link}\n\nBis dann!\nHK Growth`
       try {
         let tpl = null
-        for (const tplKey of reminderTemplateKeys(r.type, appt.type)) {
+        for (const tplKey of reminderTemplateKeys(r.type, appt.appointment_type)) {
           const hit = await selectTemplate(supabase, {
             templateKey: tplKey,
-            callType: appt.type === 'closer_call' ? 'closer_call' : 'setter_call',
+            callType: isCloserAppointment(appt.appointment_type) ? 'closer_call' : 'setter_call',
             productArea: 'system',
           })
           if (hit?.id && hit.subject && hit.body_text) { tpl = hit; break }
@@ -152,7 +160,7 @@ export async function runDueJobs(supabase: any, now: Date = new Date()): Promise
         html = renderHkEmailHtml({
           bodyText: body,
           subject,
-          callType: appt.type === 'closer_call' ? 'closer_call' : 'setter_call',
+          callType: isCloserAppointment(appt.appointment_type) ? 'closer_call' : 'setter_call',
           vars: {
             appointment_date: fmtDate(appt.appointment_at),
             appointment_time: fmtTime(appt.appointment_at),
@@ -181,9 +189,10 @@ export async function runDueJobs(supabase: any, now: Date = new Date()): Promise
   // ── 2) Sendbare Mail-Jobs ──────────────────────────────────────────────────
   // approved immer; draft nur wenn auto_send_confirmations aktiv
   const sendableStatuses = flags.auto_send_confirmations ? ['approved', 'draft'] : ['approved']
-  const { data: emails } = await supabase
+  const { data: emails, error: mailErr } = await supabase
     .from('email_jobs').select('*')
     .in('status', sendableStatuses).not('to_email', 'is', null).limit(100)
+  if (mailErr) sum.errors.push(`Mail-Abfrage: ${mailErr.message}`)
 
   for (const m of emails || []) {
     if (m.send_at && new Date(m.send_at).getTime() > now.getTime()) continue
