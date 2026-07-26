@@ -11,7 +11,7 @@ import { toast } from '@/lib/hooks/use-toast'
 import { Mail, ChevronRight, Send, XCircle, ChevronDown, ChevronUp, Pencil, Check, X } from 'lucide-react'
 
 const fmt = (iso: string) => new Intl.DateTimeFormat('de-DE', { timeZone: 'Europe/Berlin', dateStyle: 'short', timeStyle: 'short' }).format(new Date(iso))
-const FILTERS = ['alle', 'draft', 'blocked_missing_email', 'approved', 'sent', 'cancelled'] as const
+const FILTERS = ['alle', 'draft', 'blocked_missing_email', 'approved', 'sent', 'failed', 'cancelled'] as const
 // Nur in diesen Status lässt sich eine Mail noch anpassen (identisch zur API).
 const EDITABLE = ['draft', 'approved', 'blocked_missing_email', 'failed', 'cancelled']
 
@@ -106,6 +106,11 @@ export function MailPreviewsClient({ jobs }: { jobs: any[] }) {
                     </Button>
                   </div>
                 </div>
+                {j.last_error && (
+                  <p className="mt-1.5 text-xs text-red-700 bg-red-50 border border-red-100 rounded px-2 py-1 break-words">
+                    <span className="font-medium">Versand fehlgeschlagen:</span> {j.last_error}
+                  </p>
+                )}
                 {open === j.id && editing === j.id ? (
                   <div className="mt-2 space-y-2">
                     <div>

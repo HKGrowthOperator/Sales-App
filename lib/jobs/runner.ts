@@ -18,6 +18,26 @@ const fmtDate = (iso: string) => new Intl.DateTimeFormat('de-DE', { timeZone: 'E
 const fmtTime = (iso: string) => new Intl.DateTimeFormat('de-DE', { timeZone: 'Europe/Berlin', timeStyle: 'short' }).format(new Date(iso))
 
 // Reminder-Typ + Termin-Art → Vorlagen-Schlüssel (im Admin pflegbar).
+/**
+ * Setzt einen Mail-Job auf "failed" UND hinterlegt den Grund.
+ *
+ * Vorher wurde nur der Status geschrieben und die Fehlermeldung von Resend
+ * verworfen. Damit stand im Postfach "failed" ohne jede Erklaerung — nicht
+ * nachvollziehbar, ob die Adresse falsch, die Domain unverifiziert oder der
+ * Schluessel ungueltig war.
+ *
+ * Kennt die Tabelle die Spalte last_error nicht, wird still auf das reine
+ * Status-Update zurueckgefallen; ein fehlendes Protokollfeld darf den
+ * Versandlauf nicht stoppen.
+ */
+async function markEmailFailed(supabase: any, id: string, reason: string | undefined) {
+  const msg = (reason || 'Unbekannter Fehler').slice(0, 500)
+  const { error } = await supabase.from('email_jobs').update({ status: 'failed', last_error: msg }).eq('id', id)
+  if (error) {
+    await supabase.from('email_jobs').update({ status: 'failed' }).eq('id', id)
+  }
+}
+
 function reminderTemplateKey(reminderType: string, apptType: string | null | undefined): string {
   const closer = apptType === 'closer_call'
   const suffix = reminderType === 'reminder_1h' ? '1H' : reminderType === 'reminder_mid' ? 'MID' : '24H'
@@ -164,9 +184,9 @@ export async function runDueJobs(supabase: any, now: Date = new Date()): Promise
       }
       const res = await sendEmail({ to: m.to_email, subject: m.subject, body: m.body, html: mailHtml })
       if (res.ok) { await supabase.from('email_jobs').update({ status: 'sent', sent_at: nowIso }).eq('id', m.id).eq('status', 'sending'); sum.emails.sent++ }
-      else { await supabase.from('email_jobs').update({ status: 'failed' }).eq('id', m.id); sum.emails.failed++ }
+      else { await markEmailFailed(supabase, m.id, res.error); sum.emails.failed++ }
     } catch (e: any) {
-      await supabase.from('email_jobs').update({ status: 'failed' }).eq('id', m.id); sum.emails.failed++
+      await markEmailFailed(supabase, m.id, e?.message || String(e)); sum.emails.failed++
     }
   }
 
