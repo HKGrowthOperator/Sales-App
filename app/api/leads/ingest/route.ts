@@ -55,11 +55,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'batch_too_large', max: 200 }, { status: 413 })
   }
 
-  const { results, summary } = await runLeadImportPipeline(leads, {
+  const { results, summary, missingColumns } = await runLeadImportPipeline(leads, {
     leadSource: 'Lead Radar',
     scanSource: 'ingest',
     emitContract: true,
   })
 
-  return NextResponse.json({ ok: true, received: leads.length, summary, results })
+  return NextResponse.json({ ok: true, received: leads.length, summary, results, missingColumns })
 }

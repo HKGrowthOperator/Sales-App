@@ -135,10 +135,50 @@ function decisionMakerRows(leadId: string, rawManagement: string | null | undefi
   return { rows, primaryName: onlyOne ? parsed.people[0].fullName : null }
 }
 
+/**
+ * Legt einen Lead an und überlebt dabei Schema-Drift.
+ *
+ * Die Zusatzfelder aus der Leadliste (Mitarbeiterzahl, Geschäftsführung,
+ * Engpässe, Angebotsstufen …) werden direkt in `leads` geschrieben. Fehlt
+ * dort auch nur EINE Spalte, lehnt Postgres den ganzen Insert ab (42703) —
+ * und damit schlug bisher der komplette Import fehl, ohne dass ein einziger
+ * Lead ankam.
+ *
+ * Statt alles zu verlieren, entfernen wir die beanstandete Spalte und
+ * versuchen es erneut. Der Lead landet dann ohne dieses eine Feld im CRM;
+ * welche Felder verloren gingen, wird zurückgemeldet und im Import-Ergebnis
+ * angezeigt, damit die Spalte nachgezogen werden kann.
+ */
+async function insertLeadTolerant(
+  svc: any,
+  lead: Record<string, unknown>,
+): Promise<{ id: string | null; error: string | null; droppedColumns: string[] }> {
+  const payload = { ...lead }
+  const dropped: string[] = []
+
+  // Obergrenze, damit eine unerwartete Fehlermeldung keine Endlosschleife baut.
+  for (let attempt = 0; attempt < 25; attempt++) {
+    const { data, error } = await svc.from('leads').insert(payload).select('id').single()
+    if (!error) return { id: data!.id as string, error: null, droppedColumns: dropped }
+
+    // Postgres 42703 = undefined_column. Der Spaltenname steht in der Meldung,
+    // z. B.: column "employee_count" of relation "leads" does not exist
+    const isUnknownColumn = error.code === '42703' || /does not exist/i.test(error.message || '')
+    const named = /column "?([a-zA-Z0-9_]+)"?/.exec(error.message || '')
+    const col = named?.[1]
+    if (!isUnknownColumn || !col || !(col in payload)) {
+      return { id: null, error: error.message, droppedColumns: dropped }
+    }
+    delete payload[col]
+    dropped.push(col)
+  }
+  return { id: null, error: 'Zu viele unbekannte Spalten — bitte Datenbankschema prüfen.', droppedColumns: dropped }
+}
+
 export async function runLeadImportPipeline(
   leads: IngestLead[],
   opts: ImportOptions,
-): Promise<{ results: LeadResult[]; summary: Record<string, number> }> {
+): Promise<{ results: LeadResult[]; summary: Record<string, number>; missingColumns: string[] }> {
   const svc = createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -147,6 +187,9 @@ export async function runLeadImportPipeline(
 
   // 1. Mappen
   const results: LeadResult[] = []
+  // Spalten, die die Datenbank nicht kennt — werden gesammelt und im
+  // Ergebnis gemeldet, statt den Import scheitern zu lassen.
+  const droppedColumns: string[] = []
   const mapped: { key: string; row: Record<string, unknown>; idx: number; excluded?: string; rich?: Record<string, unknown> }[] = []
   leads.forEach((lead, idx) => {
     const m = mapIngestToRadarTarget(lead)
@@ -336,21 +379,25 @@ export async function runLeadImportPipeline(
     //    Kommt IMMER an; fehlt Pflicht-Info, wird der Lead als enrichment-bedürftig
     //    markiert (next_step), aber nicht blockiert.
     const { lead, missing } = leadFromRow(row, targetId as string, key, opts, m.rich)
-    const { data: leadRow, error: leadErr } = await svc.from('leads').insert(lead).select('id').single()
-    if (leadErr) {
+    const inserted = await insertLeadTolerant(svc, lead)
+    if (inserted.droppedColumns.length) {
+      droppedColumns.push(...inserted.droppedColumns)
+    }
+    if (!inserted.id) {
       results[idx].lead = 'lead_failed'
-      results[idx].lead_error = leadErr.message
+      results[idx].lead_error = inserted.error || 'Lead konnte nicht angelegt werden'
     } else {
+      const leadRow = { id: inserted.id }
       await svc.from('radar_targets')
-        .update({ status: 'promoted', promoted_lead_id: leadRow!.id })
+        .update({ status: 'promoted', promoted_lead_id: leadRow.id })
         .eq('id', targetId)
-      results[idx].lead_id = leadRow!.id
+      results[idx].lead_id = leadRow.id
       results[idx].lead = missing.length ? 'created_needs_enrichment' : 'created'
       if (missing.length) results[idx].missing = missing
 
       // c) Entscheider aus "Geschäftsführung" persistieren (best-effort).
       //    Genau ein widerspruchsfreier Entscheider → primär + als contact_name.
-      const { rows: dmRows, primaryName } = decisionMakerRows(leadRow!.id, m.rich?.management as string)
+      const { rows: dmRows, primaryName } = decisionMakerRows(leadRow.id, m.rich?.management as string)
       if (dmRows.length) {
         const { data: inserted } = await svc.from('decision_makers').insert(dmRows).select('id, is_primary')
         const primary = (inserted || []).find((d: any) => d.is_primary)
@@ -358,7 +405,7 @@ export async function runLeadImportPipeline(
           await svc.from('leads').update({
             primary_decision_maker_id: primary.id,
             contact_name: primaryName,
-          }).eq('id', leadRow!.id)
+          }).eq('id', leadRow.id)
         }
       }
     }
@@ -392,5 +439,6 @@ export async function runLeadImportPipeline(
   summary.website_corrected = websiteCorrected
   summary.researched = researched
 
-  return { results, summary }
+  const missingColumns = [...new Set(droppedColumns)]
+  return { results, summary, missingColumns }
 }
