@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { Navbar } from '@/components/shared/Navbar'
 import { Profile } from '@/lib/types'
+import { PROFILE_PUBLIC_COLUMNS } from '@/lib/profileColumns'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
@@ -11,7 +12,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('*')
+    .select(PROFILE_PUBLIC_COLUMNS)
     .eq('id', user.id)
     .single()
 

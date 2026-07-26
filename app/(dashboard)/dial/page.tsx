@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { DialerClient } from '@/components/leads/DialerClient'
 import { selectScriptForLead, fetchObjectionsFor } from '@/lib/script-routing'
 import { Lead, Profile, Script, ObjectionItem, RoleContext } from '@/lib/types'
+import { PROFILE_PUBLIC_COLUMNS } from '@/lib/profileColumns'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,7 +16,7 @@ export default async function DialPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+  const { data: profile } = await supabase.from('profiles').select(PROFILE_PUBLIC_COLUMNS).eq('id', user.id).single()
   if (!profile) redirect('/login')
 
   let query = supabase

@@ -5,6 +5,7 @@ import { LeadDetailClient } from '@/components/leads/LeadDetailClient'
 import { Profile, Lead, Script } from '@/lib/types'
 import { deriveLeadNextAction } from '@/lib/leads/nextAction'
 import { buildLeadTimeline } from '@/lib/leads/timeline'
+import { PROFILE_PUBLIC_COLUMNS } from '@/lib/profileColumns'
 
 export default async function LeadDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -13,7 +14,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+  const { data: profile } = await supabase.from('profiles').select(PROFILE_PUBLIC_COLUMNS).eq('id', user.id).single()
   if (!profile) redirect('/login')
 
   const { data: lead } = await supabase

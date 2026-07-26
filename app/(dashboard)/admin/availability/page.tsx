@@ -2,12 +2,13 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { Profile } from '@/lib/types'
 import { AvailabilityEditor } from '@/components/admin/AvailabilityEditor'
+import { PROFILE_PUBLIC_COLUMNS } from '@/lib/profileColumns'
 
 export default async function AdminAvailabilityPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
-  const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+  const { data: profile } = await supabase.from('profiles').select(PROFILE_PUBLIC_COLUMNS).eq('id', user.id).single()
   if (!profile) redirect('/login')
   if (profile.role !== 'admin') redirect('/dashboard')
 

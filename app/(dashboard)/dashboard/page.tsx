@@ -4,6 +4,7 @@ import { Profile, Lead, Appointment, Followup, Script } from '@/lib/types'
 import { OpenerDashboard } from '@/components/dashboard/OpenerDashboard'
 import { SetterDashboard } from '@/components/dashboard/SetterDashboard'
 import { CloserDashboard } from '@/components/dashboard/CloserDashboard'
+import { PROFILE_PUBLIC_COLUMNS } from '@/lib/profileColumns'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -13,7 +14,7 @@ export default async function DashboardPage() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('*')
+    .select(PROFILE_PUBLIC_COLUMNS)
     .eq('id', user.id)
     .single()
 

@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { Script, Profile } from '@/lib/types'
 import { ScriptsClient } from '@/components/scripts/ScriptsClient'
+import { PROFILE_PUBLIC_COLUMNS } from '@/lib/profileColumns'
 
 export default async function ScriptsPage() {
   const supabase = await createClient()
@@ -9,7 +10,7 @@ export default async function ScriptsPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+  const { data: profile } = await supabase.from('profiles').select(PROFILE_PUBLIC_COLUMNS).eq('id', user.id).single()
   if (!profile) redirect('/login')
 
   // Master-Skripte (alle approved) — Rolle des Users zuerst, Admin sieht alle

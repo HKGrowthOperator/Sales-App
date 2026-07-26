@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { ContentManager } from '@/components/admin/ContentManager'
 import { Script, ObjectionItem } from '@/lib/types'
+import { PROFILE_PUBLIC_COLUMNS } from '@/lib/profileColumns'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,7 +11,7 @@ export default async function AdminScriptsPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+  const { data: profile } = await supabase.from('profiles').select(PROFILE_PUBLIC_COLUMNS).eq('id', user.id).single()
   if (!profile) redirect('/login')
   if (profile.role !== 'admin') redirect('/dashboard')
 
