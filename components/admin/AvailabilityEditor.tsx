@@ -21,15 +21,36 @@ interface Exc { id: string; user_id: string; date: string; start_time: string | 
 
 const WD = [{ n: 1, l: 'Mo' }, { n: 2, l: 'Di' }, { n: 3, l: 'Mi' }, { n: 4, l: 'Do' }, { n: 5, l: 'Fr' }, { n: 6, l: 'Sa' }, { n: 7, l: 'So' }]
 
-export function AvailabilityEditor({ profiles, rules, exceptions }: { profiles: Prof[]; rules: Rule[]; exceptions: Exc[] }) {
+export function AvailabilityEditor({
+  profiles, rules, exceptions, currentUserId, googleMessage, googleError,
+}: {
+  profiles: Prof[]; rules: Rule[]; exceptions: Exc[]
+  currentUserId?: string
+  googleMessage?: string | null
+  googleError?: string | null
+}) {
   return (
     <div className="space-y-6 max-w-4xl">
       <div>
         <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2"><CalendarClock className="h-6 w-6 text-blue-600" /> Verfügbarkeit verwalten</h1>
         <p className="text-slate-500 text-sm">Arbeitszeiten, Slotlänge, Puffer, Call-Links und Blocker pro Mitarbeiter.</p>
       </div>
+
+      {/* Rueckmeldung vom Google-Rücksprung. Ohne sie sah ein fehlgeschlagener
+          Verbindungsversuch genauso aus wie gar keine Reaktion. */}
+      {googleMessage && (
+        <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
+          Google-Kalender {googleMessage}
+        </div>
+      )}
+      {googleError && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+          Google-Kalender konnte nicht verbunden werden: {googleError}
+        </div>
+      )}
+
       {profiles.map(p => (
-        <UserCard key={p.id} prof={p}
+        <UserCard key={p.id} prof={p} isSelf={p.id === currentUserId}
           rules={rules.filter(r => r.user_id === p.id)}
           exceptions={exceptions.filter(e => e.user_id === p.id)} />
       ))}
@@ -37,7 +58,7 @@ export function AvailabilityEditor({ profiles, rules, exceptions }: { profiles: 
   )
 }
 
-function UserCard({ prof, rules, exceptions }: { prof: Prof; rules: Rule[]; exceptions: Exc[] }) {
+function UserCard({ prof, rules, exceptions, isSelf }: { prof: Prof; rules: Rule[]; exceptions: Exc[]; isSelf?: boolean }) {
   const router = useRouter()
   const [callLink, setCallLink] = useState(prof.default_call_link || '')
   const [gcalId, setGcalId] = useState(prof.google_calendar_id || '')
@@ -82,7 +103,7 @@ function UserCard({ prof, rules, exceptions }: { prof: Prof; rules: Rule[]; exce
           {savingProfile ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} Profil speichern
         </Button>
 
-        <GoogleBlock prof={prof} />
+        <GoogleBlock prof={prof} isSelf={isSelf} />
 
         {/* Rollen-Verfügbarkeit */}
         <div className="grid md:grid-cols-2 gap-3 pt-2 border-t border-slate-100">
@@ -105,7 +126,7 @@ function UserCard({ prof, rules, exceptions }: { prof: Prof; rules: Rule[]; exce
 // „beschäftigt" stehen. Ohne Ausnahmen fände die App keinen einzigen
 // freien Slot. Alles, was hier steht, darf überbucht werden.
 // ============================================================
-function GoogleBlock({ prof }: { prof: Prof }) {
+function GoogleBlock({ prof, isSelf }: { prof: Prof; isSelf?: boolean }) {
   const router = useRouter()
   const [blocks, setBlocks] = useState((prof.google_overridable_blocks || ['Deep Work']).join(', '))
   const [busy, setBusy] = useState(false)
@@ -142,10 +163,16 @@ function GoogleBlock({ prof }: { prof: Prof }) {
             onClick={() => call({ action: 'disconnect' }, 'Verbindung getrennt')}>
             Trennen
           </Button>
-        ) : (
+        ) : isSelf ? (
+          // Der Verbinden-Knopf steht NUR bei der angemeldeten Person.
+          // Google meldet immer das Konto zurueck, mit dem man sich dort
+          // anmeldet — ein Knopf in einer fremden Zeile haette die
+          // Verbindung stillschweigend beim eigenen Profil abgelegt.
           <a href="/api/integrations/google-calendar/connect">
             <Button size="sm" variant="outline" className="h-7 text-xs">Kalender verbinden</Button>
           </a>
+        ) : (
+          <span className="text-[11px] text-slate-400">verbindet sich selbst</span>
         )}
       </div>
 
