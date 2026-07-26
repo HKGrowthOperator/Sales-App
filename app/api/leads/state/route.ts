@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { secretEquals } from '@/lib/security/rateLimit'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 
 export const dynamic = 'force-dynamic'
@@ -19,7 +20,7 @@ function authed(req: NextRequest): boolean {
   if (!SECRET) return false
   const h = req.headers.get('x-radar-secret')
     || (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
-  return h === SECRET
+  return secretEquals(h, SECRET)
 }
 
 async function lookup(keys: string[]) {

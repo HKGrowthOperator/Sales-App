@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { rateLimit } from '@/lib/security/rateLimit'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { researchEnabled, researchCompany } from '@/lib/radar/research'
@@ -25,6 +26,15 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  }
+
+  // Research ruft ein Sprachmodell auf — hier wird Geld ausgegeben.
+  const rl = rateLimit(`research:${user.id}`, 30, 60 * 60 * 1000)
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: 'rate_limited', detail: `Zu viele Research-Anfragen. In ${rl.retryAfterSeconds} Sekunden erneut versuchen.` },
+      { status: 429, headers: { 'retry-after': String(rl.retryAfterSeconds) } },
+    )
   }
 
   let body: any
