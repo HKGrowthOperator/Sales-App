@@ -190,9 +190,23 @@ async function createMailPreview(supabase: any, p: any): Promise<string> {
   // Zoom/Meet: fester Team-/Rollen-Link aus meeting_links, sonst persönlicher default_call_link
   const zoomLink = await resolveMeetingLink(supabase, { roleType, productArea, fallback: assignee.default_call_link })
 
+  // Die Bestaetigung beginnt mit "danke fuer das Gespraech mit
+  // {{assigned_opener_name}}". Ohne diesen Wert stand dort "danke fuer das
+  // Gespraech mit ." — in der ersten Mail nach der Buchung.
+  // Wer gebucht hat, ist bei einem Setter-Termin der Opener.
+  let openerName: string | null = null
+  try {
+    if (bookedByUserId) {
+      const { data: booker } = await supabase
+        .from('profiles').select('full_name').eq('id', bookedByUserId).maybeSingle()
+      openerName = booker?.full_name || null
+    }
+  } catch { /* Name ist Beiwerk, darf die Buchung nicht brechen */ }
+
   const vars = buildTemplateVars({
     lead, startAt, timeZone: 'Europe/Berlin', productArea,
     expertName: expert,
+    openerName,
     setterName: isSetter ? expert : null,
     closerName: !isSetter ? expert : null,
     zoomLink,
