@@ -38,10 +38,25 @@ async function markEmailFailed(supabase: any, id: string, reason: string | undef
   }
 }
 
-function reminderTemplateKey(reminderType: string, apptType: string | null | undefined): string {
+/**
+ * Vorlagen-Schluessel fuer einen Reminder, in absteigender Genauigkeit.
+ *
+ * Fuer Closer-Termine gibt es keine eigene MID-Vorlage — der
+ * Zwischen-Reminder entsteht nur bei mehr als 48h Vorlauf und war
+ * deshalb nie gepflegt. Ohne Rueckfallebene bekaeme der Kunde in dem
+ * Fall den nackten Standardtext statt der gestalteten Mail. Deshalb
+ * wird der Reihe nach gesucht und die erste vorhandene Vorlage genommen.
+ */
+function reminderTemplateKeys(reminderType: string, apptType: string | null | undefined): string[] {
   const closer = apptType === 'closer_call'
   const suffix = reminderType === 'reminder_1h' ? '1H' : reminderType === 'reminder_mid' ? 'MID' : '24H'
-  return closer ? `HK-SALES-CLOSER-${suffix}` : `HK-SALES-EXPERT-CALL-${suffix}`
+  const keys = closer
+    ? [`HK-SALES-CLOSER-${suffix}`, `HK-SALES-EXPERT-CALL-${suffix}`]
+    : [`HK-SALES-EXPERT-CALL-${suffix}`]
+  // Gibt es die MID-Vorlage nirgends, ist die 24h-Fassung immer noch
+  // deutlich besser als gar keine Vorlage.
+  if (suffix === 'MID') keys.push(closer ? 'HK-SALES-CLOSER-24H' : 'HK-SALES-EXPERT-CALL-24H')
+  return keys
 }
 
 function fillVars(text: string, vars: Record<string, string>): string {
@@ -105,12 +120,15 @@ export async function runDueJobs(supabase: any, now: Date = new Date()): Promise
         : 'Erinnerung an unseren Termin morgen'
       let body = `Hallo ${appt.lead?.contact_name || ''},\n\nkurze Erinnerung an unseren Termin:\n${fmt(appt.appointment_at)}${appt.assigned?.full_name ? `\nAnsprechpartner: ${appt.assigned.full_name}` : ''}${link}\n\nBis dann!\nHK Growth`
       try {
-        const tplKey = reminderTemplateKey(r.type, appt.type)
-        const tpl = await selectTemplate(supabase, {
-          templateKey: tplKey,
-          callType: appt.type === 'closer_call' ? 'closer_call' : 'setter_call',
-          productArea: 'system',
-        })
+        let tpl = null
+        for (const tplKey of reminderTemplateKeys(r.type, appt.type)) {
+          const hit = await selectTemplate(supabase, {
+            templateKey: tplKey,
+            callType: appt.type === 'closer_call' ? 'closer_call' : 'setter_call',
+            productArea: 'system',
+          })
+          if (hit?.id && hit.subject && hit.body_text) { tpl = hit; break }
+        }
         if (tpl?.id && tpl.subject && tpl.body_text) {
           const vars: Record<string, string> = {
             contact_first_name: (appt.lead?.contact_name || '').split(' ')[0] || '',
