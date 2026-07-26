@@ -165,6 +165,15 @@ export function renderHkEmailHtml({ bodyText, subject, vars = {}, callType }: Hk
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light">
 <title>${escapeHtml(subject)}</title>
+<style>
+  /* Auf schmalen Displays Schriftzug und Innenabstände verkleinern, damit
+     der Name nicht umbricht. Clients ohne Media-Query-Unterstützung
+     bekommen die Inline-Werte oben — die passen auch dort. */
+  @media only screen and (max-width:480px) {
+    .hk-wordmark { font-size:17px !important; letter-spacing:.08em !important; }
+    .hk-pad      { padding-left:22px !important; padding-right:22px !important; }
+  }
+</style>
 </head>
 <body style="margin:0;padding:0;background:${C.emeraldDk};font-family:Georgia,'Times New Roman',serif;-webkit-font-smoothing:antialiased;">
   <div style="display:none;max-height:0;overflow:hidden;opacity:0;">${preheader}</div>
@@ -173,28 +182,28 @@ export function renderHkEmailHtml({ bodyText, subject, vars = {}, callType }: Hk
       <table role="presentation" width="600" cellpadding="0" cellspacing="0"
              style="max-width:600px;width:100%;background:${C.paper};border-radius:5px;overflow:hidden;">
 
-        <!-- Kopf: Smaragd mit goldenem Schriftzug (reiner Text, kein Bild) -->
+        <!-- Kopf: Smaragd mit goldenem Schriftzug (reiner Text, kein Bild).
+             Der Name steht vollständig und in EINER Zeile — vorher brach
+             "GROWTH" auf dem Handy um und "Operator" fehlte ganz. -->
         <tr>
-          <td style="background:${C.emerald};padding:38px 40px 32px;text-align:center;border-bottom:2px solid ${C.gold};">
-            <div style="color:${C.goldLight};font-size:11px;letter-spacing:.3em;text-transform:uppercase;margin-bottom:14px;opacity:.65;">Growth Operator</div>
-            <div style="color:${C.goldLight};font-size:27px;letter-spacing:.24em;font-weight:400;line-height:1.2;">H K &nbsp;G R O W T H</div>
+          <td style="background:${C.emerald};padding:34px 24px 30px;text-align:center;border-bottom:2px solid ${C.gold};">
+            <div class="hk-wordmark"
+                 style="color:${C.goldLight};font-size:21px;letter-spacing:.14em;font-weight:400;line-height:1.25;white-space:nowrap;">
+              HK GROWTH OPERATOR
+            </div>
             <table role="presentation" cellpadding="0" cellspacing="0" align="center" style="margin:14px auto 0;">
               <tr>
-                <td style="width:60px;border-top:1px solid ${C.gold};font-size:0;line-height:0;">&nbsp;</td>
+                <td style="width:50px;border-top:1px solid ${C.gold};font-size:0;line-height:0;">&nbsp;</td>
                 <td style="padding:0 10px;color:${C.gold};font-size:10px;line-height:1;">&#10022;</td>
-                <td style="width:60px;border-top:1px solid ${C.gold};font-size:0;line-height:0;">&nbsp;</td>
+                <td style="width:50px;border-top:1px solid ${C.gold};font-size:0;line-height:0;">&nbsp;</td>
               </tr>
             </table>
-            <div style="color:${C.gold};font-size:10px;letter-spacing:.26em;text-transform:uppercase;margin-top:12px;line-height:1.9;">
-              Designing Excellence<br>
-              <span style="color:${C.goldLight};opacity:.72;letter-spacing:.22em;">One Step at a Time</span>
-            </div>
           </td>
         </tr>
 
         <!-- Inhalt auf Briefbogen -->
         <tr>
-          <td style="padding:40px 40px 34px;color:${C.body};font-size:15px;
+          <td class="hk-pad" style="padding:38px 40px 32px;color:${C.body};font-size:15px;
                      font-family:Georgia,'Times New Roman',serif;">
             ${appointmentBox}
             ${textToHtml(bodyText, { hasAppointmentBox: !!(date || time || link) })}
@@ -203,12 +212,12 @@ export function renderHkEmailHtml({ bodyText, subject, vars = {}, callType }: Hk
 
         <!-- Fuß -->
         <tr>
-          <td style="padding:0 40px;">
+          <td class="hk-pad" style="padding:0 40px;">
             <div style="border-top:1px solid ${C.goldSoft};font-size:0;line-height:0;">&nbsp;</div>
           </td>
         </tr>
         <tr>
-          <td style="padding:20px 40px 32px;color:${C.muted};font-size:12px;line-height:1.75;">
+          <td class="hk-pad" style="padding:20px 40px 32px;color:${C.muted};font-size:12px;line-height:1.75;">
             <span style="color:${C.ink};letter-spacing:.08em;font-size:11px;">HK GROWTH OPERATOR</span>
             &nbsp;·&nbsp; Auftrags- &amp; Prozessautomation &nbsp;·&nbsp; Gummersbach<br>
             <span style="font-size:11px;">Sie erhalten diese Nachricht, weil wir mit Ihnen im geschäftlichen Austausch stehen.
