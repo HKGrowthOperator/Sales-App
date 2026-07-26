@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { secretEquals, rateLimit } from '@/lib/security/rateLimit'
 import { IngestLead } from '@/lib/radar/ingestContract'
 import { runLeadImportPipeline } from '@/lib/leads/importPipeline'
 
@@ -29,7 +30,18 @@ export async function POST(req: NextRequest) {
   }
   const header = req.headers.get('x-radar-secret')
     || (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
-  if (header !== SECRET) {
+  // Der Radar-Endpunkt haengt an einem geteilten Geheimnis. Selbst wenn das
+  // durchsickert, bleibt der Schaden begrenzt: 60 Aufrufe pro Stunde reichen
+  // dem Radar und decken einen Dauerbeschuss ab.
+  const rlIngest = rateLimit('ingest:global', 60, 60 * 60 * 1000)
+  if (!rlIngest.allowed) {
+    return NextResponse.json(
+      { error: 'rate_limited', detail: `Zu viele Anfragen. In ${rlIngest.retryAfterSeconds} Sekunden erneut versuchen.` },
+      { status: 429, headers: { 'retry-after': String(rlIngest.retryAfterSeconds) } },
+    )
+  }
+
+  if (!secretEquals(header, SECRET)) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
 
