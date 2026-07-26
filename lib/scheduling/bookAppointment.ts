@@ -213,11 +213,19 @@ async function createMailPreview(supabase: any, p: any): Promise<string> {
   }
 
   const status = toEmail ? 'draft' : 'blocked_missing_email'
-  const { data: job, error } = await supabase.from('email_jobs').insert({
+  // body_html ist optional: fehlt die Spalte im Schema, wird die
+  // Bestaetigung trotzdem angelegt und beim Versand aus dem Text gerendert.
+  const jobRow: Record<string, unknown> = {
     lead_id: lead.id, appointment_id: appointmentId, type: map.mailType,
     to_email: toEmail, subject, body, body_html: bodyHtml, status,
     created_from_event: map.event, created_by: bookedByUserId,
-  }).select('id').maybeSingle()
+  }
+  let { data: job, error } = await supabase.from('email_jobs').insert(jobRow).select('id').maybeSingle()
+  if (error && /body_html/.test(error.message || '')) {
+    delete jobRow.body_html
+    const retry = await supabase.from('email_jobs').insert(jobRow).select('id').maybeSingle()
+    job = retry.data; error = retry.error
+  }
   // 23505 = Bestätigung existiert bereits (Idempotenz) → kein Duplikat, kein Fehler
   if (error && error.code !== '23505') return 'failed'
 
