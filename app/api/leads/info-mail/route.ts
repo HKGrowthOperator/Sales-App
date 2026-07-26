@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { selectTemplate } from '@/lib/email/templates'
 import { productAreaFromEntryAngle } from '@/lib/email/templates'
+import { buildSalutation } from '@/lib/email/salutation'
 
 export const dynamic = 'force-dynamic'
 
@@ -57,6 +58,7 @@ export async function POST(req: NextRequest) {
 
   const vars: Record<string, string> = {
     contact_first_name: firstName || '',
+    contact_salutation: buildSalutation(lead as any) || firstName || '',
     company_name: lead.company_name || '',
     assigned_opener_name: me?.full_name || 'HK Growth',
     assigned_setter_name: me?.full_name || 'HK Growth',

@@ -6,6 +6,7 @@
 // ============================================================
 import { APPOINTMENT_STATUS, BLOCKING_APPOINTMENT_STATUSES, CALENDAR_SYNC, isTerminalAppointmentStatus } from '@/lib/scheduling/status'
 import { isSlotBookable } from '@/lib/scheduling/slots'
+import { buildSalutation } from '@/lib/email/salutation'
 import { fetchGoogleBusyViaApi } from '@/lib/scheduling/busyClient'
 import { selectTemplate } from '@/lib/email/templates'
 
@@ -207,6 +208,7 @@ export async function markNoShow(a: NoShowArgs): Promise<ActionResult> {
 
       const vars: Record<string, string> = {
         contact_first_name: (appt.lead?.contact_name || '').split(' ')[0] || '',
+        contact_salutation: buildSalutation(appt.lead) || (appt.lead?.contact_name || ''),
         company_name: appt.lead?.company_name || '',
         appointment_date: at ? new Intl.DateTimeFormat('de-DE', { timeZone: 'Europe/Berlin', dateStyle: 'full' }).format(new Date(at)) : '',
         appointment_time: at ? new Intl.DateTimeFormat('de-DE', { timeZone: 'Europe/Berlin', timeStyle: 'short' }).format(new Date(at)) : '',

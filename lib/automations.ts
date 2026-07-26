@@ -6,6 +6,7 @@
 // ============================================================
 import { Lead, Profile, CallResult, RoleContext, LeadStatus, LeadScore } from '@/lib/types'
 import { selectTemplate, productAreaFromEntryAngle } from '@/lib/email/templates'
+import { buildSalutation } from '@/lib/email/salutation'
 
 /** Holt Betreff/Text aus einer Admin-Vorlage; null, wenn keine gepflegt ist. */
 async function templateMail(
@@ -23,6 +24,7 @@ async function templateMail(
     if (!tpl?.id || !tpl.subject || !tpl.body_text) return null
     const vars: Record<string, string> = {
       contact_first_name: (lead.contact_name || '').split(' ')[0] || '',
+      contact_salutation: buildSalutation(lead as any) || (lead.contact_name || ''),
       contact_name: lead.contact_name || '',
       company_name: lead.company_name || '',
       assigned_opener_name: profile.full_name || 'HK Growth Operator',
