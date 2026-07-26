@@ -195,11 +195,24 @@ export async function markNoShow(a: NoShowArgs): Promise<ActionResult> {
     })
     if (tpl?.id && tpl.subject && tpl.body_text) {
       const at = appt.appointment_at as string | undefined
+      // Die Vorlage unterschreibt mit {{assigned_setter_name}}. Fehlte der
+      // Name in den Variablen, endete die Mail mit einer leeren Zeile ueber
+      // "HK Growth Operator" — beim Empfaenger sichtbar.
+      let assigneeName = ''
+      try {
+        const { data: who } = await a.supabase
+          .from('profiles').select('full_name').eq('id', appt.assigned_user_id).maybeSingle()
+        assigneeName = who?.full_name || ''
+      } catch { /* Name ist Beiwerk, darf den No-Show-Ablauf nicht brechen */ }
+
       const vars: Record<string, string> = {
         contact_first_name: (appt.lead?.contact_name || '').split(' ')[0] || '',
         company_name: appt.lead?.company_name || '',
         appointment_date: at ? new Intl.DateTimeFormat('de-DE', { timeZone: 'Europe/Berlin', dateStyle: 'full' }).format(new Date(at)) : '',
         appointment_time: at ? new Intl.DateTimeFormat('de-DE', { timeZone: 'Europe/Berlin', timeStyle: 'short' }).format(new Date(at)) : '',
+        assigned_setter_name: assigneeName,
+        assigned_closer_name: assigneeName,
+        assigned_opener_name: assigneeName,
       }
       const fill = (s: string) => s.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, k: string) => vars[k] ?? '')
       nsSubject = fill(tpl.subject)
