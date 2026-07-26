@@ -4,7 +4,12 @@ import { Profile } from '@/lib/types'
 import { AvailabilityEditor } from '@/components/admin/AvailabilityEditor'
 import { PROFILE_PUBLIC_COLUMNS } from '@/lib/profileColumns'
 
-export default async function AdminAvailabilityPage() {
+export default async function AdminAvailabilityPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ google?: string; google_error?: string }>
+}) {
+  const sp = await searchParams
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
@@ -29,6 +34,9 @@ export default async function AdminAvailabilityPage() {
       profiles={(profiles || []) as any}
       rules={(rules || []) as any}
       exceptions={(exceptions || []) as any}
+      currentUserId={user.id}
+      googleMessage={sp?.google || null}
+      googleError={sp?.google_error || null}
     />
   )
 }
