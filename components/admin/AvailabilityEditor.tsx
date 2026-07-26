@@ -81,7 +81,15 @@ function UserCard({ prof, rules, exceptions, isSelf }: { prof: Prof; rules: Rule
     <Card>
       <CardHeader className="pb-2">
         <CardTitle className="text-base flex items-center justify-between gap-2">
-          <span>{prof.full_name || prof.email} <span className="text-xs font-normal text-slate-400">· {prof.role}</span></span>
+          <span>
+            {prof.full_name || prof.email}
+            {/* Ohne diese Markierung ist nicht erkennbar, welche Karte die
+                eigene ist — die Ueberschrift zeigt nur den Namen, und den
+                Kalender kann jede Person nur fuer sich selbst verbinden. */}
+            {isSelf && <span className="ml-1.5 text-[11px] font-normal text-blue-600 bg-blue-50 border border-blue-100 rounded px-1.5 py-0.5">Sie</span>}
+            <span className="text-xs font-normal text-slate-400"> · {prof.role}</span>
+            <span className="block text-[11px] font-normal text-slate-400">{prof.email}</span>
+          </span>
           <label className="flex items-center gap-1.5 text-xs font-normal">
             <input type="checkbox" checked={active} onChange={e => setActive(e.target.checked)} className="w-3.5 h-3.5" /> aktiv
           </label>

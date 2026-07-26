@@ -12,6 +12,7 @@
 // eingebauten Vorlagen zurück.
 // ============================================================
 import { renderHkEmailHtml } from '@/lib/email/layout'
+import { buildSalutation } from '@/lib/email/salutation'
 
 export type CallType = 'setter_call' | 'closer_call'
 export type ProductArea = 'website' | 'social' | 'ai' | 'system'
@@ -121,6 +122,8 @@ export function buildTemplateVars(p: {
     payment_link: p.paymentLink || null,
     // Aliase im Namensschema des HK-Mailsystems ({{…}} in den Vorlagen)
     contact_first_name: firstName || null,
+    // Geschaeftliche Anrede: "Herr Mueller" wenn gepflegt, sonst voller Name.
+    contact_salutation: buildSalutation(p.lead as any) || null,
     assigned_opener_name: p.openerName || null,
     assigned_setter_name: p.setterName || p.expertName || null,
     assigned_closer_name: p.closerName || p.expertName || null,

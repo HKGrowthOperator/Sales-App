@@ -12,6 +12,7 @@ import { BLOCKING_APPOINTMENT_STATUSES, isBlockingAppointmentStatus, isCloserApp
 import { buildCalendarInputFromAppointment, createCalendarEvent } from '@/lib/integrations/google-calendar'
 import { selectTemplate } from '@/lib/email/templates'
 import { renderHkEmailHtml } from '@/lib/email/layout'
+import { buildSalutation } from '@/lib/email/salutation'
 
 const fmt = (iso: string) => new Intl.DateTimeFormat('de-DE', { timeZone: 'Europe/Berlin', dateStyle: 'full', timeStyle: 'short' }).format(new Date(iso))
 const fmtDate = (iso: string) => new Intl.DateTimeFormat('de-DE', { timeZone: 'Europe/Berlin', dateStyle: 'full' }).format(new Date(iso))
@@ -140,6 +141,7 @@ export async function runDueJobs(supabase: any, now: Date = new Date()): Promise
         if (tpl?.id && tpl.subject && tpl.body_text) {
           const vars: Record<string, string> = {
             contact_first_name: (appt.lead?.contact_name || '').split(' ')[0] || '',
+            contact_salutation: buildSalutation(appt.lead) || (appt.lead?.contact_name || ''),
             company_name: appt.lead?.company_name || '',
             appointment_date: fmtDate(appt.appointment_at),
             appointment_time: fmtTime(appt.appointment_at),
