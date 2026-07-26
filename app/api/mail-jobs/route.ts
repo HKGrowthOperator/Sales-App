@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { renderHkEmailHtml } from '@/lib/email/layout'
+import { isCloserAppointment } from '@/lib/scheduling/status'
 
 export const dynamic = 'force-dynamic'
 
@@ -103,12 +104,12 @@ export async function POST(req: NextRequest) {
   if (job.appointment_id) {
     const { data: appt } = await svc
       .from('appointments')
-      .select('id, type, appointment_at, assigned:profiles!appointments_assigned_user_id_fkey(full_name, default_call_link)')
+      .select('id, appointment_type, appointment_at, assigned:profiles!appointments_assigned_user_id_fkey(full_name, default_call_link)')
       .eq('id', job.appointment_id)
       .maybeSingle()
     if (appt?.appointment_at) {
       const assigned: any = Array.isArray(appt.assigned) ? appt.assigned[0] : appt.assigned
-      callType = appt.type === 'closer_call' ? 'closer_call' : 'setter_call'
+      callType = isCloserAppointment(appt.appointment_type) ? 'closer_call' : 'setter_call'
       vars = {
         appointment_date: fmtDate(appt.appointment_at),
         appointment_time: fmtTime(appt.appointment_at),
