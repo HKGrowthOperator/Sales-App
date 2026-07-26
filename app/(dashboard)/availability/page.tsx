@@ -3,12 +3,13 @@ import { redirect } from 'next/navigation'
 import { groupSlotsByDay, slotTimeLabel } from '@/lib/scheduling/slots'
 import { getAvailableSlotsWithGoogle } from '@/lib/scheduling/slotsServer'
 import { CalendarClock, ShieldCheck, Clock } from 'lucide-react'
+import { PROFILE_PUBLIC_COLUMNS } from '@/lib/profileColumns'
 
 export default async function AvailabilityPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
-  const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+  const { data: profile } = await supabase.from('profiles').select(PROFILE_PUBLIC_COLUMNS).eq('id', user.id).single()
   if (!profile) redirect('/login')
 
   const from = new Date()

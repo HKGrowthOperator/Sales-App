@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { Profile, Lead, CallSession, RoleContext } from '@/lib/types'
 import { SessionClient } from '@/components/session/SessionClient'
+import { PROFILE_PUBLIC_COLUMNS } from '@/lib/profileColumns'
 
 // Status-Queues je Rolle
 const QUEUE_STATUSES: Record<RoleContext, string[]> = {
@@ -15,7 +16,7 @@ export default async function SessionPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+  const { data: profile } = await supabase.from('profiles').select(PROFILE_PUBLIC_COLUMNS).eq('id', user.id).single()
   if (!profile) redirect('/login')
 
   const roleLabel: RoleContext = profile.role === 'setter' ? 'Setter'

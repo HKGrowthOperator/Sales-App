@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { RadarShellHeader } from '@/components/radar/RadarShellHeader'
 import { Profile } from '@/lib/types'
+import { PROFILE_PUBLIC_COLUMNS } from '@/lib/profileColumns'
 
 // Eigenes App-Layout für den Lead Radar — bewusst OHNE die Sales-Cockpit-
 // Navigation. Wird aus der Zentrale (HK Control Center) als eigenes Werkzeug
@@ -13,7 +14,7 @@ export default async function RadarLayout({ children }: { children: React.ReactN
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+  const { data: profile } = await supabase.from('profiles').select(PROFILE_PUBLIC_COLUMNS).eq('id', user.id).single()
   if (!profile) redirect('/login')
 
   // Radar ist ein Admin-Werkzeug (Nick/Luis).
