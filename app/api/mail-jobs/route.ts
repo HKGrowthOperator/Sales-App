@@ -128,12 +128,27 @@ export async function POST(req: NextRequest) {
     ? 'blocked_missing_email'
     : job.status === 'blocked_missing_email' || job.status === 'approved' ? 'draft' : job.status
 
-  const { data, error } = await svc
-    .from('email_jobs')
-    .update({ subject, body, body_html: bodyHtml, to_email: toEmail, status: nextStatus })
-    .eq('id', id)
-    .select('id, subject, body, body_html, to_email, status')
-    .single()
+  // Kennt die Tabelle die Spalte body_html nicht (aelterer Schemastand),
+  // wird die Mail trotzdem gespeichert — dann eben ohne gestaltete Fassung.
+  // Der Versand faellt in dem Fall auf den Text zurueck. Besser eine
+  // schlichte Mail als eine Fehlermeldung und gar keine.
+  const full: Record<string, unknown> = { subject, body, body_html: bodyHtml, to_email: toEmail, status: nextStatus }
+  let data: any = null
+  let error: { message: string } | null = null
+  {
+    const first = await svc
+      .from('email_jobs').update(full).eq('id', id)
+      .select('id, subject, body, body_html, to_email, status').single()
+    data = first.data; error = first.error
+
+    if (error && /body_html/.test(error.message || '')) {
+      delete full.body_html
+      const retry = await svc
+        .from('email_jobs').update(full).eq('id', id)
+        .select('id, subject, body, to_email, status').single()
+      data = retry.data; error = retry.error
+    }
+  }
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
 
   return NextResponse.json({ ok: true, job: data })
