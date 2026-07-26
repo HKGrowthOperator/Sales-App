@@ -175,6 +175,9 @@ export function LeadUploadClient({ profile, allProfiles }: Props) {
   // Fehler bleibt sichtbar stehen — eine Toast-Meldung ist weg, bevor man
   // sie lesen konnte, und dann steht man ohne Anhaltspunkt da.
   const [importError, setImportError] = useState<string | null>(null)
+  // Spalten, die die Datenbank nicht kennt. Der Import läuft trotzdem durch,
+  // diese Felder fehlen dann aber am Lead.
+  const [missingColumns, setMissingColumns] = useState<string[]>([])
 
   function loadTable(text: string, label: string) {
     const parsed = parseTable(text)
@@ -288,6 +291,7 @@ export function LeadUploadClient({ profile, allProfiles }: Props) {
     setSummary(null)
     setResults([])
     setImportError(null)
+    setMissingColumns([])
     setProgress({ done: 0, total: importable.length })
 
     const agg: ImportSummary = {}
@@ -315,6 +319,9 @@ export function LeadUploadClient({ profile, allProfiles }: Props) {
           agg[k] = (agg[k] || 0) + (v as number)
         }
         allResults.push(...(data.results || []))
+        if (Array.isArray(data.missingColumns) && data.missingColumns.length) {
+          setMissingColumns(prev => [...new Set([...prev, ...data.missingColumns])])
+        }
         setProgress({ done: Math.min(i + CHUNK_SIZE, importable.length), total: importable.length })
         setSummary({ ...agg })
         setResults([...allResults])
@@ -337,6 +344,23 @@ export function LeadUploadClient({ profile, allProfiles }: Props) {
           <ChevronLeft className="h-4 w-4" /> Zur Leadliste
         </Link>
         <h1 className="text-2xl font-bold text-slate-900">Import abgeschlossen</h1>
+
+        {missingColumns.length > 0 && (
+          <Card className="border-amber-200 bg-amber-50">
+            <CardContent className="p-4 space-y-1">
+              <div className="flex items-center gap-2 text-sm font-medium text-amber-900">
+                <AlertTriangle className="h-4 w-4" /> Felder konnten nicht gespeichert werden
+              </div>
+              <p className="text-xs text-amber-800">
+                Die Leads sind im CRM angekommen, aber diese Spalten kennt die Datenbank nicht:{' '}
+                <span className="font-mono">{missingColumns.join(', ')}</span>
+              </p>
+              <p className="text-[11px] text-amber-600">
+                Die Angaben aus der Liste fehlen an diesen Leads, bis die Spalten angelegt sind.
+              </p>
+            </CardContent>
+          </Card>
+        )}
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[

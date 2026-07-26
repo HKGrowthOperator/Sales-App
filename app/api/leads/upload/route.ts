@@ -52,11 +52,11 @@ export async function POST(req: NextRequest) {
     : 'Tabellen-Import'
   const assignedTo = typeof body.assigned_to === 'string' && body.assigned_to ? body.assigned_to : null
 
-  const { results, summary } = await runLeadImportPipeline(leads, {
+  const { results, summary, missingColumns } = await runLeadImportPipeline(leads, {
     leadSource,
     scanSource: 'upload',
     assignedTo,
   })
 
-  return NextResponse.json({ ok: true, received: leads.length, summary, results })
+  return NextResponse.json({ ok: true, received: leads.length, summary, results, missingColumns })
 }
