@@ -19,10 +19,11 @@ interface Props {
 
 // Felder, die der Mitarbeiter in eigene Worte umschreibt (die gesprochenen Teile)
 const FIELDS: { key: keyof Script; label: string; rows: number }[] = [
-  { key: 'opening_line',    label: 'Einstieg (Begrüßung + Vorbezug)', rows: 4 },
-  { key: 'relevance_line',  label: 'Relevanz / Aufhänger',            rows: 4 },
-  { key: 'core_question',   label: 'Kernfrage',                        rows: 2 },
-  { key: 'transition_line', label: 'Übergang / nächster Schritt',      rows: 3 },
+  { key: 'opening_line',    label: 'Einstieg (Begrüßung + Vorbezug)',       rows: 4 },
+  { key: 'relevance_line',  label: 'Relevanz / Aufhänger',                  rows: 4 },
+  { key: 'core_question',   label: 'Kernfrage (Methodenfrage)',             rows: 2 },
+  { key: 'mechanism',       label: 'Mechanismus (wenn „Was ist das?")',     rows: 3 },
+  { key: 'transition_line', label: 'Übergang / nächster Schritt',           rows: 3 },
 ]
 
 export function ScriptPersonalizer({ master, existing, profile, onClose, onSaved }: Props) {
@@ -32,6 +33,7 @@ export function ScriptPersonalizer({ master, existing, profile, onClose, onSaved
       opening_line: base.opening_line || '',
       relevance_line: base.relevance_line || '',
       core_question: base.core_question || '',
+      mechanism: base.mechanism || '',
       transition_line: base.transition_line || '',
     }
   })
@@ -82,6 +84,7 @@ export function ScriptPersonalizer({ master, existing, profile, onClose, onSaved
       opening_line: values.opening_line,
       relevance_line: values.relevance_line,
       core_question: values.core_question,
+      mechanism: values.mechanism || null,
       transition_line: values.transition_line,
       closing_line: values.transition_line,
       // Rahmen aus dem Master übernehmen (Panel bleibt vollständig)
@@ -90,6 +93,7 @@ export function ScriptPersonalizer({ master, existing, profile, onClose, onSaved
       positioning: master.positioning,
       method_name: master.method_name,
       main_body: master.main_body,
+      full_script: master.full_script,
       qualifying_questions_json: master.qualifying_questions_json ?? [],
       required_notes_json: master.required_notes_json ?? [],
       status: submit ? 'pending_review' : 'draft',

@@ -1,6 +1,34 @@
-// Script-Routing: persönlich-approved (Rolle+Winkel) > Master (Rolle+Winkel) > Master (Rolle).
+// Script-Routing: persönlich-approved (Rolle+Winkel) > Master (Rolle+Winkel)
+// > Master (Rolle+Pfeiler-Winkel) > Master (Rolle).
 // Funktioniert mit Server- oder Client-Supabase-Instanz.
-import { Script, RoleContext, ObjectionItem } from '@/lib/types'
+import { Script, RoleContext, ObjectionItem, EntryAngle } from '@/lib/types'
+
+// Es gibt genau DREI Anruf-Pfeiler: Website · Social/Branding · KI-Integration
+// (Entscheidung HK, 017). Jeder der 15 Lead-Winkel wird auf einen davon
+// gemappt; der kanonische Winkel ist der, unter dem das Pfeiler-Master-
+// Skript gespeichert ist. Das Wachstumssystem ist ein Angebots-Bündel im
+// Closing, kein Anruf-Grund — Komplettangebot-Leads starten über Website.
+export const PILLAR_ANGLE: Record<string, EntryAngle> = {
+  'Website': 'Website',
+  'Lokale Sichtbarkeit': 'Website',
+  'Anfragen': 'Website',
+  'Paid Ads': 'Website',
+  'Komplettangebot': 'Website',
+  'Social Media': 'Social Media',
+  'Personal Brand': 'Social Media',
+  'Unternehmensbrand': 'Social Media',
+  'Außenwirkung': 'Social Media',
+  'Content-Produktion': 'Social Media',
+  'Imagefilm': 'Social Media',
+  'Events': 'Social Media',
+  'Recruiting': 'Social Media',
+  'KI-Zeitersparnis': 'Automationen & CRM',
+  'Automationen & CRM': 'Automationen & CRM',
+}
+
+export function pillarAngleFor(entryAngle: string | null | undefined): EntryAngle {
+  return (entryAngle && PILLAR_ANGLE[entryAngle]) || 'Website'
+}
 
 export async function selectScriptForLead(
   supabase: any,
@@ -32,6 +60,17 @@ export async function selectScriptForLead(
       .eq('status', 'approved').eq('entry_angle', entryAngle)
       .limit(1).maybeSingle()
     if (master) return master as Script
+
+    // Pfeiler-Fallback: z. B. „Personal Brand" → Pfeiler-Skript „Social Media"
+    const canonical = pillarAngleFor(entryAngle)
+    if (canonical !== entryAngle) {
+      const { data: pillarMaster } = await supabase
+        .from('scripts').select('*')
+        .eq('script_type', 'master').eq('role', roleLabel)
+        .eq('status', 'approved').eq('entry_angle', canonical)
+        .limit(1).maybeSingle()
+      if (pillarMaster) return pillarMaster as Script
+    }
   }
 
   const { data: fallback } = await supabase

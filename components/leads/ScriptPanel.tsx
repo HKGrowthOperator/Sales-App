@@ -1,14 +1,15 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { Lead, Profile, Script, ObjectionHandling, ObjectionItem, SITUATION_LABELS } from '@/lib/types'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import {
   ChevronDown, ChevronUp, Copy, Check,
   Target, MessageSquare, HelpCircle, ArrowRight, Flag, BookOpen, AlertTriangle,
-  Mic, ListChecks
+  Mic, ListChecks, Cog, PenLine
 } from 'lucide-react'
+import { renderMarkup, ColorLegend, stripMarkup, SCRIPT_FONT } from '@/components/shared/ScriptMarkup'
 
 interface Props {
   script: Script | null
@@ -21,6 +22,12 @@ export function ScriptPanel({ script, lead, profile, objections = [] }: Props) {
   const [fullScriptOpen, setFullScriptOpen] = useState(false)
   const [expandedObjection, setExpandedObjection] = useState<number | null>(null)
   const [copied, setCopied] = useState(false)
+  // „Back to the Script": Einwand zuklappen + zurück an den Skript-Anfang
+  const topRef = useRef<HTMLDivElement>(null)
+  function backToScript() {
+    setExpandedObjection(null)
+    topRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
 
   // Name des eingeloggten Nutzers (Anrufer) — Closer = Luis/Nick, Opener/Setter = jeweilige Person
   const callerName = (profile.full_name || '').trim() || 'HK Growth'
@@ -42,7 +49,10 @@ export function ScriptPanel({ script, lead, profile, objections = [] }: Props) {
   function personalize(text: string | null | undefined): string {
     if (!text) return ''
     return text
-      // Anrufer = eingeloggter Nutzer
+      // Anrufer = eingeloggter Nutzer (HK-Standard: [dein Name])
+      .replaceAll('[dein Name]', callerName)
+      .replaceAll('[Dein Name]', callerName)
+      .replaceAll('[dein name]', callerName)
       .replaceAll('[ICH]', callerName)
       .replaceAll('[OPENER-NAME]', callerName)
       .replaceAll('[SETTER-NAME]', callerName)
@@ -85,10 +95,11 @@ export function ScriptPanel({ script, lead, profile, objections = [] }: Props) {
       script.opening_line   && `\nEINSTIEG:\n${personalize(script.opening_line)}`,
       script.relevance_line && `\nWARUM SIE JETZT:\n${personalize(script.relevance_line)}`,
       script.core_question  && `\nKERNFRAGE:\n${personalize(script.core_question)}`,
+      script.mechanism      && `\nMECHANISMUS:\n${personalize(script.mechanism)}`,
       script.main_body      && `\nHAUPTTEIL:\n${personalize(script.main_body)}`,
       script.transition_line && `\nÜBERGANG:\n${personalize(script.transition_line)}`,
       script.closing_line   && `\nABSCHLUSS:\n${personalize(script.closing_line)}`,
-    ].filter(Boolean).join('\n')
+    ].filter(Boolean).map(t => stripMarkup(t as string)).join('\n')
     navigator.clipboard.writeText(parts)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
@@ -108,7 +119,7 @@ export function ScriptPanel({ script, lead, profile, objections = [] }: Props) {
   const situationLabel = script.situation ? SITUATION_LABELS[script.situation] : null
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" ref={topRef}>
 
       {/* Header */}
       <div className="flex items-center justify-between gap-3">
@@ -183,11 +194,22 @@ export function ScriptPanel({ script, lead, profile, objections = [] }: Props) {
       {script.core_question && (
         <ScriptBlock
           icon={<HelpCircle className="h-3.5 w-3.5 text-purple-500" />}
-          label="Kernfrage"
+          label="Kernfrage (Methodenfrage)"
           labelColor="text-purple-700"
           bgColor="bg-purple-50 border-purple-100"
           text={personalize(script.core_question)}
           highlight
+        />
+      )}
+
+      {/* Mechanismus — Korthauer: erklären, ohne zu viel zu erklären */}
+      {script.mechanism && (
+        <ScriptBlock
+          icon={<Cog className="h-3.5 w-3.5 text-cyan-600" />}
+          label={'Mechanismus (wenn „Was ist das?")'}
+          labelColor="text-cyan-700"
+          bgColor="bg-cyan-50 border-cyan-100"
+          text={personalize(script.mechanism)}
         />
       )}
 
@@ -241,7 +263,23 @@ export function ScriptPanel({ script, lead, profile, objections = [] }: Props) {
         </div>
       )}
 
-      {/* Full Script — einklappbar */}
+      {/* Notiz-Checkliste — hält die Kette Skript → Notizen → Automation intakt */}
+      {Array.isArray(script.required_notes_json) && script.required_notes_json.length > 0 && (
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5">
+          <div className="flex items-center gap-1.5 mb-1.5 text-xs font-bold uppercase tracking-wider text-slate-500">
+            <PenLine className="h-3.5 w-3.5" /> Im Call notieren
+          </div>
+          <ul className="space-y-1">
+            {script.required_notes_json.map((n, i) => (
+              <li key={i} className="flex gap-2 text-xs text-slate-600 leading-relaxed">
+                <span className="text-slate-300">▢</span><span>{n}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Full Script — einklappbar, farbcodiert, ruhige Lesbarkeit (Serif) */}
       {script.full_script && (
         <div className="border border-slate-200 rounded-xl overflow-hidden">
           <button
@@ -257,9 +295,10 @@ export function ScriptPanel({ script, lead, profile, objections = [] }: Props) {
             }
           </button>
           {fullScriptOpen && (
-            <div className="px-4 py-3 bg-white">
-              <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-line">
-                {personalize(script.full_script)}
+            <div className="px-4 py-3 bg-white space-y-3">
+              <ColorLegend />
+              <p className="text-[15px] text-slate-800 leading-[1.75] whitespace-pre-line" style={SCRIPT_FONT}>
+                {renderMarkup(personalize(script.full_script))}
               </p>
             </div>
           )}
@@ -289,8 +328,14 @@ export function ScriptPanel({ script, lead, profile, objections = [] }: Props) {
                   }
                 </button>
                 {expandedObjection === i && (
-                  <div className="px-3 pb-3 pt-1 bg-green-50 border-t border-green-100">
-                    <p className="text-sm text-slate-700 leading-relaxed">{personalize(obj.response)}</p>
+                  <div className="px-3 pb-3 pt-1 bg-green-50 border-t border-green-100 space-y-2">
+                    <p className="text-sm text-slate-700 leading-relaxed" style={SCRIPT_FONT}>{renderMarkup(personalize(obj.response))}</p>
+                    <button
+                      onClick={backToScript}
+                      className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-slate-800 text-white text-xs font-bold uppercase tracking-wider py-2 hover:bg-slate-700 transition-colors"
+                    >
+                      ← Back to the Script
+                    </button>
                   </div>
                 )}
               </div>
@@ -319,8 +364,8 @@ function ScriptBlock({
       <div className={`flex items-center gap-1.5 mb-2 text-xs font-bold uppercase tracking-wider ${labelColor}`}>
         {icon} {label}
       </div>
-      <p className={`text-sm text-slate-800 leading-relaxed whitespace-pre-line ${highlight ? 'font-medium' : ''}`}>
-        {text}
+      <p className={`text-[15px] text-slate-800 leading-[1.7] whitespace-pre-line ${highlight ? 'font-medium' : ''}`} style={SCRIPT_FONT}>
+        {renderMarkup(text)}
       </p>
     </div>
   )

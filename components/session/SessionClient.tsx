@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { createClient } from '@/lib/supabase/client'
-import { selectScriptForLead, fetchObjectionsFor } from '@/lib/script-routing'
+import { selectScriptForLead, fetchObjectionsFor, pillarAngleFor } from '@/lib/script-routing'
 import { ScriptPanel } from '@/components/leads/ScriptPanel'
 import { CallNoteForm } from '@/components/leads/CallNoteForm'
 import { ScoreBadge, StatusBadge } from '@/components/shared/StatusBadge'
@@ -122,6 +122,16 @@ function StartScreen({ profile, roleLabel, candidates }: { profile: Profile; rol
 }
 
 // ─── CALL ─────────────────────────────────────────────────────────────────────
+// Die 3 HK-Anruf-Pfeiler — Auswahl schreibt den kanonischen Einstiegswinkel
+// an den Lead und steuert damit Skript, Bestätigungs-Mail (product_area) und Radar.
+// Es gibt genau DREI Gründe, warum wir anrufen. Das Wachstumssystem ist das
+// Angebots-Bündel im Closing — kein eigener Anruf-Grund.
+const PILLARS: { angle: string; label: string }[] = [
+  { angle: 'Website', label: '🌐 Website' },
+  { angle: 'Social Media', label: '📣 Social & Branding' },
+  { angle: 'Automationen & CRM', label: '🤖 KI-Integration' },
+]
+
 function CallScreen({ profile, roleLabel, session, sessionLead, done, total, onSkip, onEnd }: {
   profile: Profile; roleLabel: RoleContext; session: CallSession; sessionLead: SLWithLead
   done: number; total: number; onSkip: () => void; onEnd: () => void
@@ -132,17 +142,32 @@ function CallScreen({ profile, roleLabel, session, sessionLead, done, total, onS
   const [objections, setObjections] = useState<ObjectionItem[]>([])
   const [loadingScript, setLoadingScript] = useState(true)
   const [skipping, setSkipping] = useState(false)
+  // Pfeiler-Umschalter + Phasen-Vorschau (eigene Rolle = Standard)
+  const [entryAngle, setEntryAngle] = useState<string | null>(lead.entry_angle)
+  const [viewRole, setViewRole] = useState<RoleContext>(roleLabel)
 
   useEffect(() => {
     let active = true
     const supabase = createClient()
     setLoadingScript(true)
     Promise.all([
-      selectScriptForLead(supabase, { roleLabel, userId: profile.id, entryAngle: lead.entry_angle }),
-      fetchObjectionsFor(supabase, roleLabel, lead.entry_angle),
+      selectScriptForLead(supabase, { roleLabel: viewRole, userId: profile.id, entryAngle }),
+      fetchObjectionsFor(supabase, viewRole, entryAngle),
     ]).then(([s, o]) => { if (active) { setScript(s); setObjections(o); setLoadingScript(false) } })
     return () => { active = false }
-  }, [lead.id, roleLabel, profile.id, lead.entry_angle])
+  }, [lead.id, viewRole, profile.id, entryAngle])
+
+  // Pfeiler wählen → entry_angle am Lead speichern (steuert Mail-Vorlage + Radar)
+  async function choosePillar(angle: string) {
+    if (pillarAngleFor(entryAngle) === angle) return
+    setEntryAngle(angle)
+    const supabase = createClient()
+    const { error } = await supabase.from('leads')
+      .update({ entry_angle: angle, updated_at: new Date().toISOString() })
+      .eq('id', lead.id)
+    if (error) toast({ title: 'Pfeiler nicht gespeichert', description: error.message, variant: 'destructive' })
+    else toast({ title: 'Pfeiler gesetzt', description: PILLARS.find(p => p.angle === angle)?.label })
+  }
 
   async function handleSaved(note: CallNote) {
     const supabase = createClient()
@@ -235,8 +260,37 @@ function CallScreen({ profile, roleLabel, session, sessionLead, done, total, onS
             </CardContent>
           </Card>
 
-          {/* Script */}
-          <Card><CardContent className="p-4">
+          {/* Script — mit Pfeiler-Umschalter + Phasen-Vorschau */}
+          <Card><CardContent className="p-4 space-y-3">
+            <div className="space-y-2">
+              <div className="flex flex-wrap gap-1.5">
+                {PILLARS.map(p => {
+                  const active = pillarAngleFor(entryAngle) === p.angle
+                  return (
+                    <button key={p.angle} onClick={() => choosePillar(p.angle)}
+                      className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                        active
+                          ? 'bg-blue-600 text-white border-blue-600 font-semibold'
+                          : 'bg-white text-slate-600 border-slate-200 hover:border-blue-300'
+                      }`}>
+                      {p.label}
+                    </button>
+                  )
+                })}
+              </div>
+              <div className="flex items-center gap-1.5">
+                {(['Opener', 'Setter', 'Closer'] as RoleContext[]).map(r => (
+                  <button key={r} onClick={() => setViewRole(r)}
+                    className={`text-[11px] px-2 py-0.5 rounded border transition-colors ${
+                      viewRole === r
+                        ? 'bg-slate-800 text-white border-slate-800 font-semibold'
+                        : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'
+                    }`}>
+                    {r}{r === roleLabel ? ' (meine Phase)' : ''}
+                  </button>
+                ))}
+              </div>
+            </div>
             {loadingScript
               ? <div className="text-slate-400 text-sm flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Skript wird geladen…</div>
               : <ScriptPanel script={script} lead={lead} profile={profile} objections={objections} />}

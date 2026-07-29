@@ -335,6 +335,8 @@ export interface Script {
   // Erweiterte Struktur (echte HK-Skripte)
   positioning: string | null
   method_name: string | null
+  // Korthauer-Beat: Mechanismus erklären, ohne zu viel zu erklären (014)
+  mechanism: string | null
   qualifying_questions_json: string[]
   tone_guidance: string | null
   created_by: string | null
